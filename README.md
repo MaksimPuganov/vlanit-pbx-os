@@ -1,0 +1,61 @@
+# VLANit PBX OS
+
+Собственный установочный ISO для автоматического развёртывания MikoPBX
+на физических x86-64 устройствах: Debian 13 (trixie) Minimal + Podman +
+MikoPBX в контейнере + Btrfs со снапшотами. Установка полностью автономна
+(интернет на целевом устройстве не требуется).
+
+Это самостоятельный продукт: VLANit Portal и его зависимости в состав не входят.
+
+## Требования к сборочной машине
+
+- Debian 13 (trixie) amd64 (проверено), или иной Linux с Docker.
+- Docker с доступом пользователя (сборка выполняется в привилегированном
+  build-контейнере `scripts/Dockerfile.build`; root на сборочной машине
+  не требуется).
+- RAM ≥ 8 ГБ, диск ≥ 30 ГБ свободно (ISO ~1.3 ГБ + сборочные каталоги).
+- KVM для тестов (для скорости; без KVM тесты работают в эмуляции — медленно).
+
+## Команды
+
+```bash
+# подготовка payload (один раз, нужен docker)
+bash scripts/pull-mikopbx.sh
+
+# сборка ISO
+make iso            # == bash scripts/build.sh в build-контейнере
+
+# тесты в QEMU/KVM (нужен пакет ovmf: apt-get download ovmf + dpkg -x)
+bash scripts/test-qemu.sh all        # все сценарии
+bash scripts/test-qemu.sh install    # только установка/загрузка/MikoPBX
+
+# запись на USB (требует root, ДЕСТРУКТИВНО)
+sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.0-amd64.iso /dev/sdX
+
+make clean          # очистка build/{rootfs,live,iso-staging}, dist
+```
+
+## Артефакты
+
+| Путь | Назначение |
+|---|---|
+| `dist/VLANit-PBX-1.0-amd64.iso` | итоговый загрузочный ISO (UEFI) |
+| `dist/VLANit-PBX-1.0-amd64.iso.sha256` | контрольная сумма |
+| `build/payload/mikopbx-*.tar.zst` | экспортированный образ MikoPBX (+sha256) |
+| `build/payload/golden.tar.zst` | Golden Image устанавливаемой системы |
+| `build/logs/` | журналы шагов сборки |
+
+## Состав ISO
+
+- `live/` — ядро Debian, initramfs со скриптом `vlanit-init` (монтирует ISO
+  по метке `VLANIT_PBX_OS`, squashfs rootfs + overlayfs) и rootfs Live-среды.
+- `payload/` — Golden Image (tar.zst), образ MikoPBX (tar.zst), манифест
+  версий, контрольные суммы, дефолты установщика.
+- `boot/grub/` — GRUB UEFI (`grub.cfg`, `efi.img`).
+
+## Важно
+
+- Установка только UEFI (Legacy BIOS — не в v1, архитектура это допускает).
+- Установщик и его автономный режим описаны в `docs/installation.md`.
+- Исследование MikoPBX: `docs/mikopbx-research.md`.
+- Результаты тестов: `docs/testing.md`.

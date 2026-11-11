@@ -1,0 +1,19 @@
+# Значения по умолчанию установщика (могут быть переопределены в мастере)
+hostname: vlanit-pbx
+network:
+  mode: dhcp          # dhcp | static
+timezone: UTC
+ssh:
+  enabled: true
+storage:
+  filesystem: btrfs
+  efi_size_mib: 1024
+  system_size_mib: 40960   # раздел System (Btrfs)
+  # Data-раздел занимает остаток диска
+mikopbx:
+  name: VLANit-PBX
+  web_admin_login: admin
+  # web_admin_password задаётся установщиком (генерируется или вводится)
+container:
+  runtime: podman
+  network_mode: host

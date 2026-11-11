@@ -1,0 +1,57 @@
+#!/bin/busybox sh
+# vlanit-init — PID 1 initramfs VLANit PBX OS Live.
+# Находит ISO по метке VLANIT_PBX_OS, монтирует squashfs rootfs
+# с overlayfs (tmpfs) и выполняет switch_root.
+#
+# Параметры ядра:
+#   VLANIT_DEBUG=1  — интерактивная shell-диагностика перед switch_root
+#   console=ttyS0   — журнал также на последовательный порт
+set -e
+
+/bin/busybox mkdir -p /proc /sys /dev /run
+/bin/busybox mount -t proc proc /proc
+/bin/busybox mount -t sysfs sys /sys
+/bin/busybox mount -t devtmpfs dev /dev
+/bin/busybox mount -t tmpfs tmpfs /run
+
+log() { echo "vlanit-init: $*"; }
+
+# --- найти устройство с ISO ---
+ISO_DEV=""
+for d in /dev/sr0 /dev/sr1 /dev/cdrom; do
+    [ -b "$d" ] || continue
+    if /bin/busybox blkid -o value -s LABEL "$d" 2>/dev/null | grep -q "^VLANIT_PBX_OS$"; then
+        ISO_DEV="$d"; break
+    fi
+done
+if [ -z "$ISO_DEV" ]; then
+    log "ISO с меткой VLANIT_PBX_OS не найден, пробуем поиск по всем блочным"
+    for d in /dev/sr* /dev/vd* /dev/sd*; do
+        [ -b "$d" ] || continue
+        /bin/busybox blkid -o value -s LABEL "$d" 2>/dev/null | grep -q "^VLANIT_PBX_OS$" || continue
+        ISO_DEV="$d"; break
+    done
+fi
+[ -n "$ISO_DEV" ] || { log "FATAL: установочный носитель не найден"; /bin/busybox sh; }
+
+log "монтирование $ISO_DEV"
+/bin/busybox mkdir -p /mnt/iso /mnt/ro /mnt/newroot /mnt/rw
+/bin/busybox mount -t iso9660 -o ro "$ISO_DEV" /mnt/iso
+
+log "монтирование squashfs rootfs"
+/bin/busybox mkdir -p /mnt/rw/upper /mnt/rw/work
+/bin/busybox mount -t squashfs -o ro,loop /mnt/iso/live/rootfs.squashfs /mnt/ro
+
+/bin/busybox mount -t overlay overlay \
+    -o lowerdir=/mnt/ro,upperdir=/mnt/rw/upper,workdir=/mnt/rw/work /mnt/newroot
+
+# ISO остаётся доступен установленной live-системе (payload)
+/bin/busybox mkdir -p /mnt/newroot/media/vlanit
+/bin/busybox mount --move /mnt/iso /mnt/newroot/media/vlanit
+
+log "switch_root"
+if grep -q "VLANIT_DEBUG=1" /proc/cmdline; then
+    log "VLANIT_DEBUG=1: root смонтирован в /mnt/newroot, shell для диагностики"
+    /bin/busybox sh
+fi
+exec /bin/busybox switch_root /mnt/newroot /sbin/init

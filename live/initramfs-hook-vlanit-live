@@ -1,0 +1,27 @@
+#!/bin/sh
+# initramfs-tools hook: vlanit-live
+# Копирует busybox, vlanit-init и необходимые модули ядра в initramfs.
+set -e
+
+PREREQS=""
+case $1 in
+    prereqs) echo "$PREREQS"; exit 0 ;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+# busybox со всеми апплетами (mount, blkid, switch_root и т.д.)
+copy_exec /bin/busybox /bin/busybox
+
+# наш init
+copy_exec /opt/vlanit/vlanit-init /vlanit-init
+
+# модули: ФС live-среды + типовые контроллеры дисков/приводов
+for m in \
+    squashfs isofs loop overlay \
+    sr_mod cdrom \
+    virtio_blk virtio_scsi virtio_net \
+    sd_mod ahci libahci nvme nvme-core \
+    ata_piix; do
+    manual_add_modules "$m" 2>/dev/null || true
+done

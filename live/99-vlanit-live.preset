@@ -1,0 +1,2 @@
+# VLANit Live: установщик на tty1 вместо getty
+enable vlanit-installer.service

@@ -1,0 +1,30 @@
+# VLANit declarative provisioning — пример схемы 1
+schema_version: 1
+
+system:
+  hostname: vlanit-pbx-001
+  network:
+    mode: dhcp            # dhcp | static
+    # static пример:
+    # interface: eth0
+    # address: 192.168.1.10/24
+    # gateway: 192.168.1.1
+    # dns: [192.168.1.1, 8.8.8.8]
+
+storage:
+  filesystem: btrfs
+  snapshots: true
+
+container:
+  runtime: podman
+  network_mode: host
+
+mikopbx:
+  name: VLANit-PBX-001
+
+  provisioning:
+    enabled: true
+    profile: basic
+    # базовый профиль задаёт только подтверждённые параметры:
+    # name (PBX_NAME), web_admin_login, web_admin_password (опционально),
+    # SSH_AUTHORIZED_KEYS (опционально), порты SIP/RTP/TLS (опционально)

@@ -1,0 +1,31 @@
+# Основной конфиг сборки VLANit PBX OS
+distro:
+  name: VLANit PBX OS
+  version: "1.0"
+  codename: trixie
+  arch: amd64
+
+debian:
+  suite: trixie
+  mirror: http://deb.debian.org/debian
+  components: main contrib non-free-firmware
+
+mikopbx:
+  image: mikopbx/mikopbx:2026.6.99-amd64
+  digest: "sha256:6489e2a72ee6c670383ce7f61e21ad419880193ecad964d93e91596256c1c4b0"
+  # приводится к виду localhost/vlanit/mikopbx:<tag> при импорте
+  local_name: localhost/vlanit/mikopbx:2026.6.99-amd64
+  tag: "2026.6.99-amd64"
+  container_name: mikopbx
+
+installer:
+  version: "1.0.0"
+  # минимальные предварительные требования (на основе офиц. док-ции MikoPBX)
+  min_ram_mb: 2048
+  warn_disk_gb: 64
+
+provisioning:
+  schema_version: 1
+
+output:
+  iso_name: VLANit-PBX-1.0-amd64.iso

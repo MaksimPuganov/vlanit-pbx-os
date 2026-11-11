@@ -1,0 +1,27 @@
+# VLANit PBX OS — systemd Quadlet для MikoPBX (rootful Podman)
+# Помещается установщиком/сборкой в /etc/containers/systemd/mikopbx.container
+[Unit]
+Description=MikoPBX (VLANit PBX OS)
+Documentation=https://docs.mikopbx.com
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=localhost/vlanit/mikopbx:2026.6.99-amd64
+ContainerName=mikopbx
+HostName=mikopbx
+Network=host
+AddCapability=NET_ADMIN
+Volume=/var/spool/mikopbx/cf:/cf
+Volume=/var/spool/mikopbx/storage:/storage
+Environment=ID_WWW_USER=1001
+Environment=ID_WWW_GROUP=1001
+Environment=SSH_PORT=23
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+TimeoutStopSec=90
+
+[Install]
+WantedBy=multi-user.target

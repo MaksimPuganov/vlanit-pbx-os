@@ -1,0 +1,5 @@
+# VLANit: авто-активация служб после установки
+enable vlanit-firstboot.service
+enable ssh.service
+enable systemd-networkd.service
+enable systemd-resolved.service

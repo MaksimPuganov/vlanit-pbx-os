@@ -1,0 +1,15 @@
+[Unit]
+Description=VLANit test agent (QEMU only)
+ConditionKernelCommandLine=VLANIT_TEST
+After=multi-user.target
+Wants=mikopbx.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/vlanit/vlanit-test-agent.sh
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target

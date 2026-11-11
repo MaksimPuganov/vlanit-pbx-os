@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""vlanit-provision — декларативный provisioning VLANit PBX OS (схема 1).
+
+Части:
+  system  — hostname, network, ssh, storage (см. provisioning/system/)
+  mikopbx — базовые параметры MikoPBX через переменные окружения контейнера
+            (подтверждено DockerCloud provisioning, docs/mikopbx-research.md)
+
+Идемпотентен: повторный запуск не меняет уже применённую конфигурацию,
+кроме случаев, когда значение в YAML изменилось (перезапись quadlet-файла).
+"""
+import ipaddress
+import re
+import sys
+from pathlib import Path
+
+try:
+    import yaml
+except ImportError:
+    sys.exit("требуется python3-yaml")
+
+SCHEMA_VERSION = 1
+QUADLET_PATH = Path("/etc/containers/systemd/mikopbx.container")
+ENV_PATH = Path("/etc/vlanit/mikopbx-env")
+
+ALLOWED_MIKOPBX_ENV = {
+    # подтверждено официальной документацией / исходным кодом образа
+    "PBX_NAME", "WEB_ADMIN_LOGIN", "WEB_ADMIN_PASSWORD", "SSH_AUTHORIZED_KEYS",
+    "ENABLE_USE_NAT", "EXTERNAL_SIP_IP_ADDR", "EXTERNAL_SIP_HOST_NAME",
+    "SSH_PORT", "WEB_PORT", "WEB_HTTPS_PORT", "SIP_PORT", "TLS_PORT",
+    "RTP_PORT_FROM", "RTP_PORT_TO", "IAX_PORT", "AMI_PORT", "AJAM_PORT",
+    "AJAM_PORT_TLS", "BEANSTALK_PORT", "REDIS_PORT", "GNATS_PORT",
+    "ID_WWW_USER", "ID_WWW_GROUP",
+}
+
+HOSTNAME_RE = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$")
+
+
+def die(msg: str) -> "None":
+    print(f"vlanit-provision: ОШИБКА: {msg}", file=sys.stderr)
+    sys.exit(2)
+
+
+def validate(data: dict) -> dict:
+    if not isinstance(data, dict):
+        die("корень документа должен быть mapping")
+    if data.get("schema_version") != SCHEMA_VERSION:
+        die(f"schema_version должен быть {SCHEMA_VERSION}")
+    system = data.get("system", {})
+    if not isinstance(system, dict):
+        die("system должен быть mapping")
+    host = system.get("hostname")
+    if host is not None and not HOSTNAME_RE.match(str(host)):
+        die(f"некорректный hostname: {host}")
+    net = system.get("network", {})
+    if not isinstance(net, dict):
+        die("network должен быть mapping")
+    if net.get("mode", "dhcp") not in ("dhcp", "static"):
+        die("network.mode должен быть dhcp или static")
+    if net.get("mode") == "static":
+        try:
+            ipaddress.ip_interface(net["address"])
+        except Exception:
+            die("network.address должен быть CIDR, напр. 192.168.1.10/24")
+        ipaddress.ip_address(net.get("gateway", "")) if net.get("gateway") else None
+    storage = data.get("storage", {})
+    if storage.get("filesystem", "btrfs") != "btrfs":
+        die("поддерживается только btrfs")
+    container = data.get("container", {})
+    if container.get("runtime", "podman") != "podman":
+        die("поддерживается только podman")
+    if container.get("network_mode", "host") != "host":
+        die("MikoPBX требует network_mode: host")
+    mikopbx = data.get("mikopbx", {})
+    prov = mikopbx.get("provisioning", {})
+    if prov.get("profile", "basic") != "basic":
+        die("пока поддерживается только profile: basic")
+    if "name" in mikopbx and not HOSTNAME_RE.match(str(mikopbx["name"])):
+        die(f"некорректное mikopbx.name: {mikopbx['name']}")
+    if prov.get("enabled", False):
+        for key in (mikopbx.get("env") or {}):
+            if key not in ALLOWED_MIKOPBX_ENV:
+                die(f"неподтверждённый параметр mikopbx.env.{key} — отказ")
+    return data
+
+
+def main() -> None:
+    if len(sys.argv) < 2:
+        die("использование: vlanit-provision [--validate-only] <config.yaml>")
+    validate_only = "--validate-only" in sys.argv
+    files = [a for a in sys.argv[1:] if a != "--validate-only"]
+    if len(files) != 1:
+        die("использование: vlanit-provision [--validate-only] <config.yaml>")
+    with open(files[0], encoding="utf-8") as fh:
+        data = validate(yaml.safe_load(fh))
+    if validate_only:
+        print("vlanit-provision: конфигурация корректна")
+        return
+
+    mikopbx = data.get("mikopbx", {})
+    prov = mikopbx.get("provisioning", {})
+
+    # --- PBX Provisioning: только подтверждённые env-параметры ---
+    if prov.get("enabled", False):
+        env_pairs = []
+        if mikopbx.get("name"):
+            env_pairs.append(("PBX_NAME", str(mikopbx["name"])))
+        for key, value in (mikopbx.get("env") or {}).items():
+            if key not in ALLOWED_MIKOPBX_ENV:
+                die(f"неподтверждённый параметр mikopbx.env.{key} — отказ")
+            env_pairs.append((key, str(value)))
+        lines = [f"Environment={k}={v}" for k, v in env_pairs]
+        content = "\n".join(lines) + ("\n" if lines else "")
+        if QUADLET_PATH.exists():
+            text = QUADLET_PATH.read_text(encoding="utf-8")
+            # заменить блок VLANit-ENV (между маркерами)
+            begin, end = "# VLANIT-ENV-BEGIN", "# VLANIT-ENV-END"
+            if begin in text:
+                text = re.sub(
+                    re.escape(begin) + r".*?" + re.escape(end),
+                    begin + "\n" + content.rstrip() + "\n" + end,
+                    text, flags=re.S,
+                )
+            else:
+                text = text.replace(
+                    "[Service]",
+                    f"[Service]\n{begin}\n{content.rstrip()}\n{end}\n",
+                )
+            QUADLET_PATH.write_text(text, encoding="utf-8")
+        ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
+        ENV_PATH.write_text(content, encoding="utf-8")
+        print(f"PBX provisioning: применено {len(env_pairs)} параметров "
+              f"(systemd daemon-reload + restart mikopbx применят изменения)")
+
+    # --- System Provisioning (hostname / network) ---
+    system = data.get("system", {})
+    if system.get("hostname") and Path("/etc/hostname").exists():
+        current = Path("/etc/hostname").read_text().strip()
+        if current != system["hostname"]:
+            Path("/etc/hostname").write_text(system["hostname"] + "\n")
+            print(f"hostname: {current} -> {system['hostname']}")
+
+    print("vlanit-provision: завершено")
+
+
+if __name__ == "__main__":
+    main()

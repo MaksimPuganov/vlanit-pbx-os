@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# vlanit-snapshot — локальные Btrfs-снапшоты VLANit PBX OS.
+#
+# Использование:
+#   vlanit-snapshot create <имя>        — read-only снапшот @ и data-subvolumes
+#   vlanit-snapshot list                — показать снапшоты
+#   vlanit-snapshot delete <имя>        — удалить снапшот
+#
+# Снапшоты создаются перед обновлениями; rollback рабочей БД MikoPBX
+# выполняется только после остановки контейнера (см. docs/architecture.md).
+set -Eeuo pipefail
+
+SYS_LABEL="vlanit-system"
+DATA_LABEL="vlanit-data"
+SYS_MNT="/mnt/.vlanit-snap-sys"
+DATA_MNT="/mnt/.vlanit-snap-data"
+
+die() { echo "vlanit-snapshot: $*" >&2; exit 1; }
+need_root() { [ "$(id -u)" -eq 0 ] || die "требуется root"; }
+
+mount_ctx() {
+    mkdir -p "$SYS_MNT" "$DATA_MNT"
+    mountpoint -q "$SYS_MNT" || mount -o subvolid=5 LABEL="$SYS_LABEL" "$SYS_MNT" \
+        || die "не удалось смонтировать $SYS_LABEL (subvolid=5)"
+    mountpoint -q "$DATA_MNT" || mount -o subvolid=5 LABEL="$DATA_LABEL" "$DATA_MNT" \
+        || die "не удалось смонтировать $DATA_LABEL (subvolid=5)"
+}
+
+cmd="${1:-}"; name="${2:-}"
+case "$cmd" in
+    create)
+        need_root
+        [ -n "$name" ] || die "не задано имя снапшота"
+        [[ "$name" =~ ^[a-zA-Z0-9._-]+$ ]] || die "недопустимое имя: $name"
+        mount_ctx
+        ts="$(date +%Y%m%d-%H%M%S)"
+        for sub in @ @var_log; do
+            [ -d "$SYS_MNT/$sub" ] || die "subvolume $sub не найден"
+            btrfs subvolume snapshot -r "$SYS_MNT/$sub" "$SYS_MNT/.snapshots/${ts}-${name}-${sub#@}"
+        done
+        for sub in mikopbx-cf mikopbx-storage; do
+            [ -d "$DATA_MNT/$sub" ] || die "subvolume $sub не найден"
+            btrfs subvolume snapshot -r "$DATA_MNT/$sub" "$DATA_MNT/.snapshots/${ts}-${name}-${sub}"
+        done
+        echo "Снапшот '$name' создан: ${ts}-${name}-*"
+        ;;
+    list)
+        need_root
+        mount_ctx
+        echo "== system ($SYS_LABEL) =="
+        btrfs subvolume list -s "$SYS_MNT" 2>/dev/null || true
+        echo "== data ($DATA_LABEL) =="
+        btrfs subvolume list -s "$DATA_MNT" 2>/dev/null || true
+        ;;
+    delete)
+        need_root
+        [ -n "$name" ] || die "не задано имя снапшота"
+        mount_ctx
+        found=0
+        for mnt in "$SYS_MNT" "$DATA_MNT"; do
+            while read -r p; do
+                [ -n "$p" ] || continue
+                echo "удаление $p"
+                btrfs subvolume delete "$mnt/$p"
+                found=1
+            done < <(ls "$mnt/.snapshots/" 2>/dev/null | grep -F -- "$name" || true)
+        done
+        [ "$found" -eq 1 ] || echo "снапшоты, содержащие '$name', не найдены"
+        ;;
+    *)
+        grep '^#' "$0" | grep -v '^#!' | head -12
+        exit 1
+        ;;
+esac

@@ -1,0 +1,23 @@
+[Unit]
+Description=VLANit Installer TUI
+After=systemd-user-sessions.service plymouth-quit-wait.service
+After=rc-local.service
+Before=getty@tty1.service
+Conflicts=getty@tty1.service
+ConditionKernelCommandLine=!vlanit.noinstall
+
+[Service]
+Type=idle
+ExecStart=/opt/vlanit/installer/vlanit-installer
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+UtmpIdentifier=tty1
+UtmpMode=user
+
+[Install]
+WantedBy=graphical.target

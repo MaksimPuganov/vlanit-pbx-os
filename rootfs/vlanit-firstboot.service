@@ -1,0 +1,16 @@
+[Unit]
+Description=VLANit first boot provisioning
+ConditionPathExists=!/var/lib/vlanit/firstboot-done
+After=network-pre.target local-fs.target
+Before=network.target
+Wants=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/vlanit/vlanit-firstboot.sh
+RemainAfterExit=true
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

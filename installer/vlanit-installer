@@ -1,0 +1,243 @@
+#!/usr/bin/env bash
+# VLANit Installer — TUI установки VLANit PBX OS.
+# Интерактивный режим: dialog. Автоматический: /media/vlanit/autoinstall.yaml.
+set -Eeuo pipefail
+
+export LC_ALL=ru_RU.UTF-8
+INSTALLER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+for lib in common hardware disk network deploy; do
+    # shellcheck disable=SC1090
+    . "$INSTALLER_DIR/lib/$lib.sh"
+done
+
+ISO_MOUNT="/media/vlanit"
+PAYLOAD="$ISO_MOUNT/payload"
+mkdir -p "$(dirname "$LOG_FILE")"
+touch "$LOG_FILE"
+
+[ -d "$PAYLOAD" ] || { echo "payload не найден на $ISO_MOUNT" >&2; exit 1; }
+
+AUTOMODE=""
+AUTO_FILE="$ISO_MOUNT/autoinstall.yaml"
+if [ -f "$AUTO_FILE" ]; then
+    AUTOMODE=1
+    log "обнаружен autoinstall: $AUTO_FILE"
+fi
+
+# ---------------------------------------------------------------
+# Сбор параметров (интерактивно или из autoinstall.yaml)
+# ---------------------------------------------------------------
+collect_hardware_info
+if [ "$HW_BOOT_MODE" != "UEFI" ]; then
+    if [ -n "$AUTOMODE" ]; then die "требуется UEFI"; fi
+    dialog --title "Режим загрузки" --msgbox \
+        "Загрузка выполнена не в UEFI-режиме.\nVLANit PBX OS 1.0 устанавливается только на UEFI.\n\nРежим: $HW_BOOT_MODE" 10 60
+    exit 1
+fi
+
+# --- Диск ---
+mapfile -t DISKS < <(list_candidate_disks)
+[ "${#DISKS[@]}" -gt 0 ] || die "не найдено подходящих внутренних дисков"
+
+TARGET_DISK=""
+if [ -n "$AUTOMODE" ]; then
+    TARGET_DISK="$(yaml_get "$AUTO_FILE" disk "")"
+    echo "$TARGET_DISK" | grep -q "^/dev/" || die "autoinstall: некорректный диск: $TARGET_DISK"
+    known=0
+    for d in "${DISKS[@]}"; do [ "${d%%|*}" = "$TARGET_DISK" ] && known=1; done
+    [ "$known" -eq 1 ] || die "autoinstall: диск $TARGET_DISK не в списке кандидатов (защита)"
+    disk_is_clean_target "$TARGET_DISK" || die "autoinstall: на $TARGET_DISK есть смонтированные разделы"
+    min_bytes=$(( (1024 + 40960 + 8192) * 1024 * 1024 ))
+    size_bytes="$(disk_size_bytes "$TARGET_DISK")"
+    [ "$size_bytes" -ge "$min_bytes" ] || \
+        die "autoinstall: диск $(human_gb "$size_bytes") GiB слишком мал (нужно ≥ 50 GiB: EFI 1 + System 40 + Data 8)"
+else
+    menu_items=()
+    i=1
+    for d in "${DISKS[@]}"; do
+        IFS='|' read -r dev size tran model <<< "$d"
+        menu_items+=("$i" "$dev  $(human_gb "$size") GiB  ${model:-unknown}  [${tran:-sata}]")
+        eval "DISK_$i='$dev'"
+        i=$((i+1))
+    done
+    while true; do
+        choice="$(dialog --title "Экран 2. Выбор диска" --menu \
+            "ВНИМАНИЕ: выбранный диск будет полностью очищен.\n\nДоступные накопители:" \
+            18 78 10 "${menu_items[@]}" --stdout)" || exit 1
+        TARGET_DISK="$(eval echo \$DISK_$choice)"
+        size_bytes="$(disk_size_bytes "$TARGET_DISK")"
+        warn_gb="$(yaml_get "$PAYLOAD/build.yaml" installer.warn_disk_gb 64)"
+        warn_bytes=$((warn_gb * 1024 * 1024 * 1024))
+        msg="Диск: $TARGET_DISK ($(human_gb "$size_bytes") GiB)\nВсе данные на диске будут удалены."
+        [ "$size_bytes" -lt "$warn_bytes" ] && msg="$msg\n\nПРЕДУПРЕЖДЕНИЕ: диск меньше $warn_gb GiB."
+        dialog --title "Подтверждение диска" --yesno "$msg\n\nПродолжить?" 12 70 && break
+    done
+fi
+log "целевой диск: $TARGET_DISK"
+
+# --- Сеть ---
+NET_IFACE="" NET_MODE="dhcp" NET_ADDR="" NET_GW="" NET_DNS="9.9.9.9"
+if [ -n "$AUTOMODE" ]; then
+    NET_IFACE="$(yaml_get "$AUTO_FILE" network.interface "")"
+    [ -z "$NET_IFACE" ] && NET_IFACE="$(list_interfaces | head -1)"
+    NET_MODE="$(yaml_get "$AUTO_FILE" network.mode dhcp)"
+    NET_ADDR="$(yaml_get "$AUTO_FILE" network.address "")"
+    NET_GW="$(yaml_get "$AUTO_FILE" network.gateway "")"
+    NET_DNS="$(yaml_get "$AUTO_FILE" network.dns "9.9.9.9")"
+else
+    ifaces=(); i=1
+    for f in $(list_interfaces); do
+        mac="$(iface_mac "$f")"
+        ifaces+=("$i" "$f  ($mac)")
+        eval "IFACE_$i='$f'"
+        i=$((i+1))
+    done
+    [ "${#ifaces[@]}" -gt 0 ] || die "не найдено сетевых интерфейсов"
+    c="$(dialog --title "Экран 3. Настройка сети" --menu "Выберите Ethernet-интерфейс:" \
+        14 70 8 "${ifaces[@]}" --stdout)" || exit 1
+    NET_IFACE="$(eval echo \$IFACE_$c)"
+    c="$(dialog --title "Режим сети" --menu "Режим получения адреса:" 10 60 4 \
+        1 "DHCP (автоматически)" 2 "Статический IPv4" --stdout)" || exit 1
+    if [ "$c" = "2" ]; then
+        NET_MODE="static"
+        NET_ADDR="$(dialog --title "Статический IPv4" --inputbox "Адрес с префиксом (напр. 192.168.1.10/24):" 8 60 --stdout)" || exit 1
+        NET_GW="$(dialog --title "Шлюз" --inputbox "Адрес шлюза:" 8 60 --stdout)" || exit 1
+        NET_DNS="$(dialog --title "DNS" --inputbox "DNS-серверы (через пробел):" 8 60 "9.9.9.9" --stdout)" || exit 1
+    fi
+fi
+log "сеть: $NET_IFACE, режим $NET_MODE"
+apply_live_network "$NET_IFACE" "$NET_MODE" "$NET_ADDR" "$NET_GW" "$NET_DNS"
+
+# --- Системные параметры ---
+SYS_HOSTNAME="vlanit-pbx" ADMIN_USER="vlanit" ADMIN_PASS="" SSH_ENABLED="yes" TZ_NAME="UTC"
+if [ -n "$AUTOMODE" ]; then
+    SYS_HOSTNAME="$(yaml_get "$AUTO_FILE" hostname vlanit-pbx)"
+    ADMIN_USER="$(yaml_get "$AUTO_FILE" admin.user vlanit)"
+    ADMIN_PASS="$(yaml_get "$AUTO_FILE" admin.password "")"
+    SSH_ENABLED="$(yaml_get "$AUTO_FILE" ssh.enabled yes)"
+    TZ_NAME="$(yaml_get "$AUTO_FILE" timezone UTC)"
+    [ -n "$ADMIN_PASS" ] || die "autoinstall: задайте admin.password"
+else
+    SYS_HOSTNAME="$(dialog --title "Экран 4. Параметры системы" --inputbox "Hostname:" 8 60 "vlanit-pbx" --stdout)" || exit 1
+    ADMIN_USER="$(dialog --title "Локальный администратор" --inputbox "Имя пользователя:" 8 60 "vlanit" --stdout)" || exit 1
+    ADMIN_PASS="$(dialog --title "Пароль администратора" --passwordbox "Пароль (мин. 8 символов, не используйте стандартные пароли):" 8 60 --stdout)" || exit 1
+    [ "${#ADMIN_PASS}" -ge 8 ] || { dialog --msgbox "Пароль короче 8 символов." 7 50; exit 1; }
+    c="$(dialog --title "SSH" --menu "SSH-сервер:" 9 60 3 1 "Включить" 2 "Отключить" --stdout)" || exit 1
+    [ "$c" = "2" ] && SSH_ENABLED="no"
+fi
+
+# --- MikoPBX ---
+PBX_NAME="VLANit-PBX" PBX_ADMIN_LOGIN="admin" PBX_ADMIN_PASS=""
+if [ -n "$AUTOMODE" ]; then
+    PBX_NAME="$(yaml_get "$AUTO_FILE" mikopbx.name VLANit-PBX)"
+    PBX_ADMIN_LOGIN="$(yaml_get "$AUTO_FILE" mikopbx.web_admin_login admin)"
+    PBX_ADMIN_PASS="$(yaml_get "$AUTO_FILE" mikopbx.web_admin_password "")"
+else
+    PBX_NAME="$(dialog --title "MikoPBX" --inputbox "Имя АТС (PBX_NAME):" 8 60 "VLANit-PBX" --stdout)" || exit 1
+    PBX_ADMIN_PASS="$(dialog --title "MikoPBX" --passwordbox "Пароль веб-админа MikoPBX (пусто = стандартный, не рекомендуется):" 8 60 --stdout)" || exit 1
+fi
+
+# ---------------------------------------------------------------
+# Экран 5. Подтверждение
+# ---------------------------------------------------------------
+manifest_version="$(yaml_get "$PAYLOAD/release-manifest.yaml" distro.version 1.0)"
+if [ -n "$AUTOMODE" ]; then
+    confirm="$(yaml_get "$AUTO_FILE" confirm "")"
+    [ "$confirm" = "yes" ] || die "autoinstall: confirm: yes обязателен"
+    log "автоподтверждение (autoinstall)"
+else
+    warn="$(hardware_warnings)"
+    summary="Целевой диск: $TARGET_DISK
+Режим сети: $NET_MODE (интерфейс $NET_IFACE)
+Hostname: $SYS_HOSTNAME
+Админ: $ADMIN_USER
+SSH: $SSH_ENABLED
+Имя АТС: $PBX_NAME
+Версия системы: VLANit PBX OS $manifest_version
+
+ВСЕ ДАННЫЕ НА ДИСКЕ БУДУТ УДАЛЕНЫ."
+    [ -n "$warn" ] && summary="$warn
+$summary"
+    dialog --title "Экран 5. Подтверждение установки" --yesno "$summary\n\nНачать установку?" 18 72 || exit 1
+fi
+
+# ---------------------------------------------------------------
+# Верификация payload (до любых деструктивных операций)
+# ---------------------------------------------------------------
+log "проверка контрольных сумм payload"
+( cd "$PAYLOAD" && sha256sum -c golden.tar.zst.sha256 ) || \
+    die "контрольная сумма golden.tar.zst не соответствует манифесту"
+( cd "$PAYLOAD" && sha256sum -c mikopbx-2026.6.99-amd64.tar.zst.sha256 ) || \
+    die "контрольная сумма mikopbx.tar.zst не соответствует манифесту"
+log "payload корректен"
+
+# ---------------------------------------------------------------
+# Экран 6. Установка
+# ---------------------------------------------------------------
+log "=== начало установки на $TARGET_DISK ==="
+if [ -z "$AUTOMODE" ]; then
+    dialog --infobox "Установка запущена.\nЭтапы выводятся в журнал: $LOG_FILE\n\nТерминал: Ctrl+Alt+F2" 8 60
+    sleep 2
+    clear
+fi
+echo "VLANit Installer — журнал: $LOG_FILE"
+
+KERNEL_ARGS=""
+if [ -n "$AUTOMODE" ]; then
+    KERNEL_ARGS="$(yaml_get "$AUTO_FILE" kernel_args "")"
+fi
+
+partition_disk "$TARGET_DISK"
+create_filesystems "$TARGET_DISK"
+deploy_golden "$TARGET_DISK"
+configure_target_system "$SYS_HOSTNAME" "$ADMIN_USER" "$ADMIN_PASS" "$SSH_ENABLED" "$TZ_NAME" "$KERNEL_ARGS"
+write_target_network "$SYS_MNT" "$NET_IFACE" "$NET_MODE" "$NET_ADDR" "$NET_GW" "$NET_DNS"
+configure_target_mikopbx "$PBX_NAME" "$PBX_ADMIN_LOGIN" "$PBX_ADMIN_PASS"
+import_mikopbx_image
+post_install_report "$TARGET_DISK"
+install_bootloader
+unmount_target
+
+# базовый snapshot после установки
+mount -o subvolid=5 "$(partition_device "$TARGET_DISK" 2)" /mnt 2>/dev/null && {
+    btrfs subvolume snapshot -r /mnt/@ /mnt/@snapshots/post-install-@ 2>/dev/null || true
+    umount /mnt
+} || true
+log "=== установка завершена ==="
+
+# ---------------------------------------------------------------
+# Экран 7. Завершение
+# ---------------------------------------------------------------
+IP_ADDR=""
+for _ in $(seq 1 15); do
+    IP_ADDR="$(ip -4 -o addr show dev "$NET_IFACE" | awk '{print $4}' | cut -d/ -f1 | head -1)"
+    [ -n "$IP_ADDR" ] && break
+    sleep 1
+done
+[ -n "$IP_ADDR" ] || IP_ADDR="<адрес будет назначен при загрузке>"
+
+podman_v="$(yaml_get "$PAYLOAD/release-manifest.yaml" podman "")"
+[ -n "$podman_v" ] || podman_v="(в образе)"
+finish_text="VLANit PBX OS $manifest_version
+Debian: $(yaml_get "$PAYLOAD/release-manifest.yaml" debian.version 13)
+Podman: $podman_v
+MikoPBX: 2026.6.99
+Hostname: $SYS_HOSTNAME
+IP-адрес: $IP_ADDR
+Статус MikoPBX: будет запущена автоматически при первой загрузке
+Веб-интерфейс: https://$IP_ADDR (логин: $PBX_ADMIN_LOGIN)
+
+Извлеките установочный USB и перезагрузите устройство."
+
+if [ -n "$AUTOMODE" ]; then
+    echo "$finish_text"
+    echo "VLANIT_INSTALL_DONE"
+    sync
+    sleep 2
+    reboot -f
+else
+    dialog --title "Экран 7. Установка завершена" --msgbox "$finish_text" 16 72 || true
+    if dialog --title "Перезагрузка" --yesno "Перезагрузить устройство сейчас?" 7 50; then
+        sync; reboot -f
+    fi
+fi

@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# scripts/10-golden-rootfs.sh — сборка Golden Image (устанавливаемой Debian 13).
+# Выполняется внутри build-контейнера от root.
+set -Eeuo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BUILD_DIR="$PROJECT_ROOT/build"
+ROOTFS="$BUILD_DIR/rootfs/golden"
+PAYLOAD="$BUILD_DIR/payload"
+mkdir -p "$ROOTFS" "$PAYLOAD"
+rm -rf "${ROOTFS:?}"/*   # чистый старт шага
+
+log() { printf '[golden] %s\n' "$*"; }
+
+# --- пакеты целевой системы (без рекомендаций, минимальный набор) ---
+GOLDEN_PACKAGES="
+systemd-sysv dbus udev
+linux-image-amd64 initramfs-tools busybox-static
+grub-efi-amd64 grub-pc-bin grub-common
+podman crun golang-github-containers-common
+btrfs-progs dosfstools e2fsprogs
+openssh-server sudo
+curl ca-certificates jq zstd
+python3 python3-minimal python3-yaml
+tzdata kbd
+iproute2 iputils-ping ethtool pciutils usbutils smartmontools nvme-cli dmidecode
+iptables nftables
+logrotate
+"
+
+log "mmdebstrap: Debian 13 (trixie) minimal rootfs"
+mmdebstrap \
+    --mode=root \
+    --variant=apt \
+    --architectures=amd64 \
+    --aptopt='APT::Install-Recommends "false"' \
+    --components="main contrib non-free-firmware" \
+    --include="$GOLDEN_PACKAGES" \
+    trixie "$ROOTFS" http://deb.debian.org/debian
+
+# --- установка VLANit-компонентов в rootfs ---
+log "копирование VLANit provisioning / quadlet / snapshots"
+install -d -m 0755 "$ROOTFS/opt/vlanit"
+cp -a "$PROJECT_ROOT/provisioning/." "$ROOTFS/opt/vlanit/provisioning/"
+cp -a "$PROJECT_ROOT/snapshots/vlanit-snapshot" "$ROOTFS/opt/vlanit/"
+install -D -m 0644 "$PROJECT_ROOT/quadlet/mikopbx.container" \
+    "$ROOTFS/etc/containers/systemd/mikopbx.container"
+install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-containers-registries.conf" \
+    "$ROOTFS/etc/containers/registries.conf"
+
+# first-boot служба
+install -D -m 0644 "$PROJECT_ROOT/rootfs/vlanit-firstboot.service" \
+    "$ROOTFS/etc/systemd/system/vlanit-firstboot.service"
+install -D -m 0755 "$PROJECT_ROOT/rootfs/vlanit-firstboot.sh" \
+    "$ROOTFS/opt/vlanit/vlanit-firstboot.sh"
+install -D -m 0644 "$PROJECT_ROOT/rootfs/99-vlanit.preset" \
+    "$ROOTFS/etc/systemd/system-preset/99-vlanit.preset"
+install -D -m 0755 "$PROJECT_ROOT/rootfs/vlanit-test-agent.sh" \
+    "$ROOTFS/opt/vlanit/vlanit-test-agent.sh"
+install -D -m 0644 "$PROJECT_ROOT/rootfs/vlanit-test-agent.service" \
+    "$ROOTFS/etc/systemd/system/vlanit-test-agent.service"
+
+# --- очистка уникальных идентификаторов (критично для Golden Image) ---
+log "очистка machine-id, SSH host keys, журналов"
+rm -f "$ROOTFS/etc/machine-id" "$ROOTFS/var/lib/dbus/machine-id"
+touch "$ROOTFS/etc/machine-id"  # systemd сгенерирует при первой загрузке
+rm -f "$ROOTFS/etc/ssh/ssh_host_"*
+rm -f "$ROOTFS/etc/hostname"
+find "$ROOTFS/var/log" -type f -delete 2>/dev/null || true
+: > "$ROOTFS/etc/fstab"   # установщик генерирует fstab цели
+# чистый кэш apt внутри образа
+rm -rf "$ROOTFS/var/cache/apt/"* "$ROOTFS/var/lib/apt/lists/"*
+
+# --- факты версий для манифеста ---
+DEBIAN_VERSION="$(cat "$ROOTFS/etc/debian_version")"
+KERNEL_VERSION="$(basename "$(ls -d "$ROOTFS"/lib/modules/* | head -1)")"
+PODMAN_VERSION="$(chroot "$ROOTFS" dpkg-query -W -f='${Version}' podman 2>/dev/null || echo unknown)"
+cat > "$BUILD_DIR/facts.json" <<EOF
+{
+  "debian_version": "$DEBIAN_VERSION",
+  "kernel_version": "$KERNEL_VERSION",
+  "podman_version": "$PODMAN_VERSION"
+}
+EOF
+log "факты: Debian $DEBIAN_VERSION, kernel $KERNEL_VERSION, podman $PODMAN_VERSION"
+
+# --- упаковка ---
+log "упаковка golden.tar.zst"
+tar -C "$ROOTFS" --zstd -cpf "$PAYLOAD/golden.tar.zst" .
+( cd "$PAYLOAD" && sha256sum golden.tar.zst > golden.tar.zst.sha256 )
+log "готово: $PAYLOAD/golden.tar.zst ($(du -h "$PAYLOAD/golden.tar.zst" | cut -f1))"
