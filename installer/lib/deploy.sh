@@ -134,16 +134,25 @@ PYEOF
 # chroot-операции: initramfs + загрузчик
 install_bootloader() {
     log "подготовка initramfs и GRUB (chroot)"
-    for d in proc sys dev dev/pts run; do
-        mount --rbind "/$d" "$SYS_MNT/$d" 2>/dev/null || true
-    done
+    mount_chroot_fs
     chroot "$SYS_MNT" /bin/sh -c "
         export DEBIAN_FRONTEND=noninteractive
         update-initramfs -u -k all
         grub-install --target=x86_64-efi --efi-directory=/boot/efi \
             --bootloader-id=VLANIT --recheck
+        # fallback-загрузка (слабые firmware без надёжного NVRAM)
+        mkdir -p /boot/efi/EFI/BOOT
+        cp /boot/efi/EFI/VLANIT/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.efi
         grub-mkconfig -o /boot/grub/grub.cfg
     " || die "сбой установки загрузчика"
+}
+
+# chroot-окружение: bind /proc /sys /dev /run (нужны podman и grub)
+mount_chroot_fs() {
+    for d in proc sys dev dev/pts run; do
+        mountpoint -q "$SYS_MNT/$d" 2>/dev/null && continue
+        mount --rbind "/$d" "$SYS_MNT/$d" 2>/dev/null || true
+    done
 }
 
 # Импорт образа MikoPBX в rootful Podman целевой системы (офлайн)
@@ -154,9 +163,10 @@ import_mikopbx_image() {
     cp "$PAYLOAD/mikopbx-2026.6.99-amd64.tar.zst" "$SYS_MNT/var/lib/vlanit/payload/"
 
     log "импорт образа MikoPBX в Podman (chroot)"
+    mount_chroot_fs
     chroot "$SYS_MNT" /bin/sh -c "
         if ! podman image exists '$target_image'; then
-            zcat /var/lib/vlanit/payload/mikopbx-2026.6.99-amd64.tar.zst | podman load
+            zstd -dc /var/lib/vlanit/payload/mikopbx-2026.6.99-amd64.tar.zst | podman load
             src_tag=\$(podman images --format '{{.Repository}}:{{.Tag}}' | grep mikopbx | head -1)
             [ -n \"\$src_tag\" ] && podman tag \"\$src_tag\" '$target_image'
         fi
@@ -171,10 +181,9 @@ unmount_target() {
 # Диагностика после установки (работает и в autoinstall)
 post_install_report() {
     local disk="$1"
-    echo "=== VLANit post-install report ==="
-    echo "Разметка:"
-    lsblk -o NAME,SIZE,FSTYPE,LABEL,UUID "$disk" 2>/dev/null || true
-    echo "fstab целевой системы:"
-    cat "$SYS_MNT/etc/fstab" 2>/dev/null || true
-    echo "=================================="
+    log "post-install report: разметка $disk"
+    lsblk -o NAME,SIZE,FSTYPE,LABEL,UUID "$disk" 2>/dev/null | while read -r line; do log "  $line"; done
+    log "fstab целевой системы:"
+    sed 's/^/  /' "$SYS_MNT/etc/fstab" 2>/dev/null | while read -r line; do log "$line"; done
+    log "post-install report: конец"
 }

@@ -6,13 +6,15 @@ set -u
 
 out() { echo "VLANIT_TEST: $*" > /dev/ttyS0 2>/dev/null || true; echo "VLANIT_TEST: $*"; }
 pass=0; fail=0
+AGENT_LOG=/var/log/vlanit-test-agent.log
+: > "$AGENT_LOG"
 
 check() {
     local name="$1"; shift
-    if "$@" >/dev/null 2>&1; then
+    if "$@" >>"$AGENT_LOG" 2>&1; then
         out "PASS $name"; pass=$((pass+1))
     else
-        out "FAIL $name"; fail=$((fail+1))
+        out "FAIL $name (детали: $AGENT_LOG)"; fail=$((fail+1))
     fi
 }
 
@@ -90,6 +92,8 @@ if [ "$fail" -eq 0 ]; then
     out "RESULT PASS ($pass checks)"
     out "VLANIT_TEST_PASS"
 else
+    out "AGENT_LOG (последние строки):"
+    tail -20 "$AGENT_LOG" | while read -r line; do out "  $line"; done
     out "RESULT FAIL ($fail из $((pass+fail)))"
     out "VLANIT_TEST_FAIL"
 fi

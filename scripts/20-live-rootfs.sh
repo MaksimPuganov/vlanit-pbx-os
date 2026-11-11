@@ -59,6 +59,10 @@ install -D -m 0644 "$PROJECT_ROOT/live/vlanit-installer.service" \
 install -D -m 0644 "$PROJECT_ROOT/live/99-vlanit-live.preset" \
     "$ROOTFS/etc/systemd/system-preset/99-vlanit-live.preset"
 echo "vlanit-pbx-live" > "$ROOTFS/etc/hostname"
+# ssh в live-среде не нужен (ключи удалены, сервис падает)
+chroot "$ROOTFS" systemctl mask ssh.service 2>/dev/null || true
+# preset-файл попадает в rootfs уже после установки пакетов — включаем явно
+chroot "$ROOTFS" systemctl enable vlanit-installer.service 2>/dev/null || true
 
 # очистка
 rm -f "$ROOTFS/etc/machine-id" "$ROOTFS/var/lib/dbus/machine-id"

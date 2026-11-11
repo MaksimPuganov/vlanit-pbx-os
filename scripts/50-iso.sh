@@ -46,17 +46,20 @@ done
 grub-mkimage -O x86_64-efi \
     -p /boot/grub \
     -o "$GRUB_DIR/bootx64.efi" \
-    part_gpt part_msdos iso9660 normal linux echo test all_video
+    part_gpt part_msdos iso9660 normal linux echo test all_video search search_fs_uuid search_label configfile
 
 # --- ESP-образ (FAT16) с BOOTX64.EFI ---
 log "EFI System Partition image (efi.img)"
 rm -f "$GRUB_DIR/efi.img"
-mformat -i "$GRUB_DIR/efi.img" -F 16 -C -v VLANIT_EFI :: 2>/dev/null || \
-    mformat -i "$GRUB_DIR/efi.img" -F 16 -C ::
-mmd -i "$GRUB_DIR/efi.img" ::/EFI ::/EFI/BOOT
+dd if=/dev/zero of="$GRUB_DIR/efi.img" bs=1M count=4 status=none
+# явная геометрия: mtools 4.0.48 не определяет размер мелких образов
+mformat -i "$GRUB_DIR/efi.img" -C -t 256 -h 2 -s 16 -v VLANIT_EFI ::
+mmd -i "$GRUB_DIR/efi.img" ::/EFI
+mmd -i "$GRUB_DIR/efi.img" ::/EFI/BOOT
 mcopy -i "$GRUB_DIR/efi.img" "$GRUB_DIR/bootx64.efi" ::/EFI/BOOT/BOOTX64.EFI
 cp "$STAGING/boot/grub/grub.cfg" "$GRUB_DIR/grub.cfg"
-mmd -i "$GRUB_DIR/efi.img" ::/boot ::/boot/grub
+mmd -i "$GRUB_DIR/efi.img" ::/boot
+mmd -i "$GRUB_DIR/efi.img" ::/boot/grub
 mcopy -i "$GRUB_DIR/efi.img" "$GRUB_DIR/grub.cfg" ::/boot/grub/grub.cfg
 cp "$GRUB_DIR/efi.img" "$STAGING/boot/grub/efi.img"
 

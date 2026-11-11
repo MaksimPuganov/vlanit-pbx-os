@@ -40,7 +40,8 @@ fi
 systemctl daemon-reload
 if systemctl cat mikopbx.service >/dev/null 2>&1; then
     systemctl enable mikopbx.service 2>/dev/null || true
-    systemctl start mikopbx.service || log "WARN: не удалось запустить mikopbx.service"
+    # --no-block: не блокировать firstboot (медленный старт контейнера)
+    systemctl start --no-block mikopbx.service || log "WARN: не удалось запустить mikopbx.service"
 else
     log "ERROR: quadlet mikopbx.service не создан systemd-генератором"
     exit 1

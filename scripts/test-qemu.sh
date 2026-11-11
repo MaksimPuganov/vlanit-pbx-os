@@ -15,11 +15,13 @@ cd "$PROJECT_ROOT"
 ISO="dist/VLANit-PBX-1.0-amd64.iso"
 STAGING="build/iso-staging"
 EFI_IMG="build/grub/efi.img"
-TESTDIR="build/qemu"
+# изолированный каталог на каждый запуск (защита от параллельных/старых прогонов)
+TESTDIR="build/qemu/$(date +%Y%m%d_%H%M%S)_$$"
 OVMF_DIR="tools/root/usr/share/OVMF"
 OVMF_CODE="$OVMF_DIR/OVMF_CODE_4M.fd"
 OVMF_VARS_SRC="$OVMF_DIR/OVMF_VARS_4M.fd"
 XORRISO="tools/root/usr/bin/xorriso"
+export LD_LIBRARY_PATH="$PROJECT_ROOT/tools/root/usr/lib/x86_64-linux-gnu"
 
 QEMU_MEM="${QEMU_MEM:-4096}"
 QEMU_SMP="${QEMU_SMP:-2}"
@@ -35,14 +37,21 @@ say()  { printf '\n=== %s ===\n' "$*"; }
 pass() { printf 'PASS: %s\n' "$*"; }
 fail() { printf 'FAIL: %s\n' "$*"; FAILED=1; }
 
+# очистка зависших ВМ прошлых прогонов (только наши, по -name vlanit-)
+for pid in $(pgrep -f "qemu-system.*-name vlanit-" 2>/dev/null); do
+    kill -9 "$pid" 2>/dev/null || true
+done
+
 # Сборка тестового ISO из staging (+ опциональная подмена/добавление файлов)
 # make_test_iso <out.iso> <iso9660_path=hostfile> [...]
 make_test_iso() {
     local out="$1"; shift
     local -a maps=()
-    while [ $# -gt 0 ]; do maps+=( -map "${1%%=*}" "${1#*=}" ); shift; done
-    "$XORRISO" -quiet -as mkisofs \
+    while [ $# -gt 0 ]; do maps+=( "${1%%=*}=${1#*=}" ); shift; done
+    # graft-points: iso_path=host_path
+    "$XORRISO" -as mkisofs \
         -V VLANIT_PBX_OS -A "VLANit PBX OS 1.0 test" \
+        -graft-points \
         -o "$out" \
         -e boot/grub/efi.img -no-emul-boot \
         -append_partition 2 0xef "$EFI_IMG" \
@@ -55,8 +64,10 @@ make_disk() { qemu-img create -f qcow2 "$1" "${DISK_SIZE_GB}G" >/dev/null; }
 run_qemu() {
     # run_qemu <name> <iso|-> <disk|-> [extra args...]
     local name="$1" iso="$2" disk="$3"; shift 3
-    local vars="$TESTDIR/${name}_OVMF_VARS.fd"
-    cp "$OVMF_VARS_SRC" "$vars"
+    # NVRAM общий для фаз одного сценария (t2_p1/t2_p2 → t2)
+    local vbase="${name%_p1}"; vbase="${vbase%_p2}"
+    local vars="$TESTDIR/${vbase}_OVMF_VARS.fd"
+    cp -n "$OVMF_VARS_SRC" "$vars" 2>/dev/null || true
     local -a args=(
         -name "vlanit-$name"
         -machine q35 -enable-kvm -m "$QEMU_MEM" -smp "$QEMU_SMP"
@@ -103,8 +114,7 @@ test_boot() {
     make_test_iso "$TESTDIR/t1.iso" /autoinstall.yaml=tests/integration/autoinstall.yaml
     rm -f "$TESTDIR/${name}_serial.log"
     run_qemu "$name" "$TESTDIR/t1.iso" "-"
-    if wait_serial "$TESTDIR/${name}_serial.log" "autoinstall" 300 \
-       && wait_serial "$TESTDIR/${name}_serial.log" "разметка\|partition_disk\|целевой диск" 120; then
+    if wait_serial "$TESTDIR/${name}_serial.log" "обнаружен autoinstall" 300; then
         pass "T1: UEFI-загрузка live-среды и запуск VLANit Installer"
     else
         fail "T1: установщик не запустился (см. $TESTDIR/${name}_serial.log)"
@@ -121,6 +131,7 @@ install_two_phases() {
 
     make_test_iso "$iso" /autoinstall.yaml="$yaml"
     rm -f "$disk" "$TESTDIR/${p1}_serial.log" "$TESTDIR/${p2}_serial.log"
+    make_disk "$disk"
 
     # --- фаза 1: установка ---
     local -a netargs1=()

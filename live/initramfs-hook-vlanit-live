@@ -13,8 +13,9 @@ esac
 # busybox со всеми апплетами (mount, blkid, switch_root и т.д.)
 copy_exec /bin/busybox /bin/busybox
 
-# наш init
-copy_exec /opt/vlanit/vlanit-init /vlanit-init
+# наш init ЗАМЕНЯЕТ /init initramfs (ядро всегда исполняет /init образа)
+cp /opt/vlanit/vlanit-init "$DESTDIR/init"
+chmod 755 "$DESTDIR/init"
 
 # модули: ФС live-среды + типовые контроллеры дисков/приводов
 for m in \

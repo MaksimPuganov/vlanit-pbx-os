@@ -143,7 +143,10 @@ fi
 manifest_version="$(yaml_get "$PAYLOAD/release-manifest.yaml" distro.version 1.0)"
 if [ -n "$AUTOMODE" ]; then
     confirm="$(yaml_get "$AUTO_FILE" confirm "")"
-    [ "$confirm" = "yes" ] || die "autoinstall: confirm: yes обязателен"
+    case "$confirm" in
+        yes|Yes|YES|true|True|TRUE) : ;;
+        *) die "autoinstall: confirm: yes обязателен" ;;
+    esac
     log "автоподтверждение (autoinstall)"
 else
     warn="$(hardware_warnings)"
@@ -232,6 +235,7 @@ IP-адрес: $IP_ADDR
 if [ -n "$AUTOMODE" ]; then
     echo "$finish_text"
     echo "VLANIT_INSTALL_DONE"
+    echo "VLANIT_INSTALL_DONE" > /dev/console 2>/dev/null || true
     sync
     sleep 2
     reboot -f

@@ -17,7 +17,7 @@ GOLDEN_PACKAGES="
 systemd-sysv dbus udev
 linux-image-amd64 initramfs-tools busybox-static
 grub-efi-amd64 grub-pc-bin grub-common
-podman crun golang-github-containers-common
+podman crun golang-github-containers-common systemd-resolved
 btrfs-progs dosfstools e2fsprogs
 openssh-server sudo
 curl ca-certificates jq zstd
@@ -59,6 +59,12 @@ install -D -m 0755 "$PROJECT_ROOT/rootfs/vlanit-test-agent.sh" \
     "$ROOTFS/opt/vlanit/vlanit-test-agent.sh"
 install -D -m 0644 "$PROJECT_ROOT/rootfs/vlanit-test-agent.service" \
     "$ROOTFS/etc/systemd/system/vlanit-test-agent.service"
+# preset-файл попадает в rootfs уже после установки пакетов — включаем службы явно
+for unit in vlanit-firstboot.service vlanit-test-agent.service \
+            systemd-networkd.service systemd-resolved.service ssh.service; do
+    chroot "$ROOTFS" systemctl enable "$unit" 2>/dev/null || \
+        echo "WARN: не удалось включить $unit"
+done
 
 # --- очистка уникальных идентификаторов (критично для Golden Image) ---
 log "очистка machine-id, SSH host keys, журналов"

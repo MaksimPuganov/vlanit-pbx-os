@@ -1,9 +1,9 @@
 [Unit]
 Description=VLANit first boot provisioning
 ConditionPathExists=!/var/lib/vlanit/firstboot-done
-After=network-pre.target local-fs.target
-Before=network.target
-Wants=local-fs.target
+# после multi-user: избегаем циклов транзакции systemd при старте служб
+After=multi-user.target
+Wants=multi-user.target
 
 [Service]
 Type=oneshot

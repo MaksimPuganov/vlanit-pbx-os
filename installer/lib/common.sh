@@ -9,6 +9,8 @@ log() {
     local msg="[$(date '+%H:%M:%S')] $*"
     echo "$msg" >> "$LOG_FILE" 2>/dev/null || true
     echo "$msg"
+    # дублирование на serial-консоль для диагностики и тестов
+    [ -w /dev/ttyS0 ] && echo "$msg" > /dev/ttyS0 2>/dev/null || true
 }
 
 die() {

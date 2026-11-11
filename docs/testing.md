@@ -20,61 +20,56 @@ bash scripts/test-qemu.sh all
 
 Сценарии используют профиль `tests/integration/autoinstall.yaml`
 (автоустановка на /dev/vda, 64 GiB, DHCP, тест-агент `VLANIT_TEST=1`).
-Серийные логи: `build/qemu/*_serial.log`.
+Каждый прогон изолируется в `build/qemu/<timestamp>_<pid>/`.
 
 Механика: тестовый ISO собирается из `build/iso-staging` с подложенным
 `/autoinstall.yaml`; установка (фаза 1, с ISO) и первая загрузка
-(фаза 2, без ISO) — отдельные запуски QEMU. Тест-агент
+(фаза 2, без ISO, общий NVRAM OVMF) — отдельные запуски QEMU. Тест-агент
 (`rootfs/vlanit-test-agent.sh`, активен только при `VLANIT_TEST=1` в cmdline)
-выполняет проверки на устройстве и публикует `VLANIT_TEST: PASS/FAIL …`,
-`VLANIT_TEST_PASS` / `VLANIT_TEST_FAIL` на ttyS0.
+выполняет 16 проверок на устройстве и публикует `VLANIT_TEST: PASS/FAIL …`,
+`VLANIT_TEST_PASS` / `VLANIT_TEST_FAIL` на ttyS0. После успешных проверок
+агент перезагружает устройство и проверяет сохранение данных и автозапуск
+MikoPBX (REBOOT_TEST_PASS).
 
-## Сценарии и фактические результаты
+## Фактические результаты (2026-11-12, ISO VLANit-PBX-1.0-amd64)
 
-### Т1 — Загрузка ISO (UEFI)
-Проверяется: запуск Debian Live, запуск VLANit Installer.
-- Ожидание: в serial-логе признаки autoinstall и старта разметки.
-- Статус: ЗАПЛАНИРОВАН → (заполняется прогоном)
+| Тест | Результат | Подтверждение |
+|---|---|---|
+| Т1 Загрузка ISO (UEFI) | PASS | live-среда загружена, установщик запущен |
+| Т2 Установка системы | PASS | GPT (EFI 1G/System 40G/Data rest), Btrfs, Golden Image, fstab по UUID, GRUB x86_64-efi |
+| Т3 Первая загрузка | PASS | загрузка с диска, hostname, networkd, podman, fstab-uuid |
+| Т4 MikoPBX | PASS | quadlet-служба, баннер готовности, веб-интерфейс (из ВМ и с хоста через hostfwd 8443→443), API login v3, автозапуск и данные после reboot |
+| Т5 Offline | PASS | полная установка и работа без сетевых устройств |
+| Т6 Btrfs | PASS | subvolumes смонтированы, read-only snapshot создан и отображён |
+| Т7a несуществующий диск | PASS | отказ установщика (диск не в списке кандидатов) |
+| Т7b диск 20 GiB | PASS | отказ (минимум 50 GiB) |
+| Т7c повреждённый payload | PASS | отказ по SHA256 до разметки |
+| Т7d установка без NIC | PASS | установка завершена успешно |
 
-### Т2 — Установка системы
-Проверяется: обнаружение диска, GPT, EFI, Btrfs, развёртывание rootfs,
-загрузчик, fstab. Маркер `VLANIT_INSTALL_DONE`.
-- Статус: ЗАПЛАНИРОВАН
+Итог агента: `RESULT PASS (16 checks)`, `VLANIT_TEST_PASS`, `REBOOT_TEST_PASS`.
+Логи прогонов: `build/qemu/<run>/`, сводки `build/qemu_t1.log`, `build/qemu_last_run5.log`,
+`build/qemu_t5.log`, `build/qemu_t7.log`.
 
-### Т3 — Первая загрузка
-Проверяется: загрузка Debian с диска, hostname, networkd, podman.
-- Статус: ЗАПЛАНИРОВАН
+## Состав проверок агента (16)
 
-### Т4 — MikoPBX
-Проверяется: импорт образа, запуск контейнера, служба, баннер готовности,
-веб-интерфейс (с агента и с хоста через hostfwd), REST API login (v3,
-localhost bypass), автозапуск и сохранение данных после reboot.
-- Статус: ЗАПЛАНИРОВАН
-
-### Т5 — Offline
-Проверяется: установка и работа без сетевых устройств (`-nic` отсутствует).
-- Статус: ЗАПЛАНИРОВАН
-
-### Т6 — Btrfs
-Проверяется: subvolumes, монтирование, создание и список снапшотов.
-- Статус: ЗАПЛАНИРОВАН
-
-### Т7 — Ошибки
-- Т7a несуществующий диск → отказ установщика.
-- Т7b диск 20 GiB (< 50 GiB) → отказ.
-- Т7c несоответствие SHA256 payload → отказ до разметки.
-- Т7d установка без сетевого интерфейса → успех.
-- Статус: ЗАПЛАНИРОВАН
+hostname, podman, networkd-active, fstab-uuid, btrfs-root,
+btrfs-subvol-mikopbx-cf, btrfs-snapshot-create, btrfs-snapshot-list,
+quadlet-service, mikopbx-ready-banner, mikopbx-service-active,
+mikopbx-webui, mikopbx-api-login, mikopbx-cf-nonempty,
+reboot-data-persisted, reboot-mikopbx-active.
 
 ## Не автоматизируется в v1 (ручные сценарии)
 
 - Интерактивный TUI-мастер (прохождение экранов вручную на железе/ВМ).
 - Установка на реальный SATA/NVMe диск (прогон на физическом устройстве).
 - Проверка SIP-регистрации/звонка (требуется SIP-клиент/транк).
-- Загрузка Legacy BIOS (не поддерживается в v1).
+- Загрузка Legacy BIOS (не поддерживается в v1; fallback `EFI/BOOT/BOOTX64.EFI` на целевом ESP добавлен).
 - Secure Boot (не входит в v1).
 
-## Последний прогон
+## Воспроизводимость сборки
 
-(заполняется после выполнения `bash scripts/test-qemu.sh all`: дата, ISO,
-итог по каждому тесту, ссылки на логи)
+`make clean && make iso` пересобирает ISO полностью из исходников
+(проверено: повторная сборка успешна). Побайтовая идентичность не
+гарантируется (в манифесте — дата сборки, в rootfs — метки времени пакетов);
+контроль целостности — SHA256 артефактов в `config/release-manifest.yaml`
+и `dist/*.iso.sha256`.

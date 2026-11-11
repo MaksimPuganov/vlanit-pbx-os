@@ -6,7 +6,7 @@
 # Параметры ядра:
 #   VLANIT_DEBUG=1  — интерактивная shell-диагностика перед switch_root
 #   console=ttyS0   — журнал также на последовательный порт
-set -e
+set +e
 
 /bin/busybox mkdir -p /proc /sys /dev /run
 /bin/busybox mount -t proc proc /proc
@@ -16,34 +16,64 @@ set -e
 
 log() { echo "vlanit-init: $*"; }
 
-# --- найти устройство с ISO ---
+# --- загрузка драйверов хранилищ и ФС (в initramfs нет udev) ---
+for m in cdrom sr_mod ahci libahci ata_piix sd_mod \
+         virtio_blk virtio_scsi virtio_net nvme nvme-core \
+         loop squashfs overlay isofs; do
+    /bin/busybox modprobe "$m" 2>/dev/null || true
+done
+# дать devtmpfs время создать узлы устройств
+for i in 1 2 3 4 5 6 7 8 9 10; do
+    [ -e /dev/sr0 ] && break
+    sleep 1
+done
+
+# --- найти устройство с ISO (чтение Volume ID из PVD, без blkid) ---
+# ISO9660: Primary Volume Descriptor в секторе 16, Volume ID по смещению 40,
+# т.е. байты 32808..32839.
+iso_label_of() {
+    /bin/busybox dd if="$1" bs=1 skip=32808 count=32 2>/dev/null \
+        | /bin/busybox tr -d '\000' | /bin/busybox sed 's/[[:space:]]*$//'
+}
+
 ISO_DEV=""
-for d in /dev/sr0 /dev/sr1 /dev/cdrom; do
+/bin/busybox mkdir -p /mnt/iso
+for d in /dev/sr0 /dev/sr1 /dev/cdrom /dev/sr*; do
     [ -b "$d" ] || continue
-    if /bin/busybox blkid -o value -s LABEL "$d" 2>/dev/null | grep -q "^VLANIT_PBX_OS$"; then
+    if [ "$(iso_label_of "$d")" = "VLANIT_PBX_OS" ]; then
         ISO_DEV="$d"; break
     fi
 done
+# fallback: смонтировать кандидатов и проверить наличие rootfs
 if [ -z "$ISO_DEV" ]; then
-    log "ISO с меткой VLANIT_PBX_OS не найден, пробуем поиск по всем блочным"
-    for d in /dev/sr* /dev/vd* /dev/sd*; do
+    for d in /dev/sr0 /dev/sr1 /dev/cdrom /dev/sr*; do
         [ -b "$d" ] || continue
-        /bin/busybox blkid -o value -s LABEL "$d" 2>/dev/null | grep -q "^VLANIT_PBX_OS$" || continue
-        ISO_DEV="$d"; break
+        if /bin/busybox mount -t iso9660 -o ro "$d" /mnt/iso 2>/dev/null \
+           && [ -f /mnt/iso/live/rootfs.squashfs ]; then
+            ISO_DEV="$d"; ISO_ALREADY_MOUNTED=1; break
+        fi
+        /bin/busybox umount /mnt/iso 2>/dev/null || true
     done
 fi
-[ -n "$ISO_DEV" ] || { log "FATAL: установочный носитель не найден"; /bin/busybox sh; }
+if [ -z "$ISO_DEV" ]; then
+    log "FATAL: установочный носитель не найден"
+    log "устройства: $(/bin/busybox ls /dev 2>/dev/null | /bin/busybox tr '\n' ' ')"
+    /bin/busybox sh
+fi
 
 log "монтирование $ISO_DEV"
-/bin/busybox mkdir -p /mnt/iso /mnt/ro /mnt/newroot /mnt/rw
-/bin/busybox mount -t iso9660 -o ro "$ISO_DEV" /mnt/iso
+[ -z "${ISO_ALREADY_MOUNTED:-}" ] && \
+    /bin/busybox mount -t iso9660 -o ro "$ISO_DEV" /mnt/iso
 
 log "монтирование squashfs rootfs"
+/bin/busybox mkdir -p /mnt/ro /mnt/newroot /mnt/rw
 /bin/busybox mkdir -p /mnt/rw/upper /mnt/rw/work
-/bin/busybox mount -t squashfs -o ro,loop /mnt/iso/live/rootfs.squashfs /mnt/ro
+/bin/busybox mount -t squashfs -o ro,loop /mnt/iso/live/rootfs.squashfs /mnt/ro \
+    || { log "FATAL: не удалось смонтировать rootfs.squashfs"; /bin/busybox sh; }
 
 /bin/busybox mount -t overlay overlay \
-    -o lowerdir=/mnt/ro,upperdir=/mnt/rw/upper,workdir=/mnt/rw/work /mnt/newroot
+    -o lowerdir=/mnt/ro,upperdir=/mnt/rw/upper,workdir=/mnt/rw/work /mnt/newroot \
+    || { log "FATAL: не удалось смонтировать overlay"; /bin/busybox sh; }
 
 # ISO остаётся доступен установленной live-системе (payload)
 /bin/busybox mkdir -p /mnt/newroot/media/vlanit

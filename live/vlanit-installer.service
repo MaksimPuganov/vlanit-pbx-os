@@ -20,4 +20,4 @@ UtmpIdentifier=tty1
 UtmpMode=user
 
 [Install]
-WantedBy=graphical.target
+WantedBy=multi-user.target

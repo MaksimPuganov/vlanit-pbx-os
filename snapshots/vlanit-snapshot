@@ -36,7 +36,9 @@ case "$cmd" in
         ts="$(date +%Y%m%d-%H%M%S)"
         for sub in @ @var_log; do
             [ -d "$SYS_MNT/$sub" ] || die "subvolume $sub не найден"
-            btrfs subvolume snapshot -r "$SYS_MNT/$sub" "$SYS_MNT/.snapshots/${ts}-${name}-${sub#@}"
+            # контейнер снапшотов на System-фс — subvolume @snapshots
+            btrfs subvolume snapshot -r "$SYS_MNT/$sub" \
+                "$SYS_MNT/@snapshots/${ts}-${name}-${sub#@}"
         done
         for sub in mikopbx-cf mikopbx-storage; do
             [ -d "$DATA_MNT/$sub" ] || die "subvolume $sub не найден"
@@ -57,13 +59,15 @@ case "$cmd" in
         [ -n "$name" ] || die "не задано имя снапшота"
         mount_ctx
         found=0
-        for mnt in "$SYS_MNT" "$DATA_MNT"; do
+        # System-фс: @snapshots; Data-фс: .snapshots
+        for pair in "$SYS_MNT:@snapshots" "$DATA_MNT:.snapshots"; do
+            mnt="${pair%%:*}"; container="${pair#*:}"
             while read -r p; do
                 [ -n "$p" ] || continue
                 echo "удаление $p"
-                btrfs subvolume delete "$mnt/$p"
+                btrfs subvolume delete "$mnt/$container/$p"
                 found=1
-            done < <(ls "$mnt/.snapshots/" 2>/dev/null | grep -F -- "$name" || true)
+            done < <(ls "$mnt/$container/" 2>/dev/null | grep -F -- "$name" || true)
         done
         [ "$found" -eq 1 ] || echo "снапшоты, содержащие '$name', не найдены"
         ;;
