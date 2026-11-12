@@ -13,14 +13,23 @@ mkdir -p "$STAGING/boot/grub" "$GRUB_DIR" "$DIST_DIR"
 
 log() { printf '[iso] %s\n' "$*"; }
 
-# --- grub.cfg на ISO ---
+# --- grub.cfg на ISO (фирменная тема VLANit: палитра с vlanit.com) ---
+cp "$PROJECT_ROOT/branding/vlanit-grub-bg.png" "$STAGING/boot/grub/vlanit-grub-bg.png"
 cat > "$STAGING/boot/grub/grub.cfg" <<'EOF'
 set timeout=5
 set default=0
 
-insmod part_gpt
-insmod part_msdos
-insmod iso9660
+# фирменная тема VLANit (#09090b / #F5F4F0 / золото #D4AA6A);
+# все модули встроены в core-образ, insmod не нужен.
+# Шрифт unicode.pf2 (DejaVu Sans Mono, диапазон U+20–U+2FFF: кириллица,
+# стрелки, рамки) — без него встроенный шрифт рисует рамку меню 'd'.
+loadfont /boot/grub/unicode.pf2
+terminal_output gfxterm
+background_image /boot/grub/vlanit-grub-bg.png
+set color_normal=white/black
+set color_highlight=black/yellow
+set menu_color_normal=white/black
+set menu_color_highlight=black/yellow
 
 search --no-floppy --set=root --label VLANIT_PBX_OS
 
@@ -46,7 +55,8 @@ done
 grub-mkimage -O x86_64-efi \
     -p /boot/grub \
     -o "$GRUB_DIR/bootx64.efi" \
-    part_gpt part_msdos iso9660 fat normal linux echo test all_video \
+    part_gpt part_msdos iso9660 fat png normal linux echo test all_video \
+    gfxterm gfxterm_background bitmap bitmap_scale \
     search search_fs_uuid search_label configfile
 
 # --- ESP-образ (FAT16) с BOOTX64.EFI ---
@@ -62,6 +72,12 @@ cp "$STAGING/boot/grub/grub.cfg" "$GRUB_DIR/grub.cfg"
 mmd -i "$GRUB_DIR/efi.img" ::/boot
 mmd -i "$GRUB_DIR/efi.img" ::/boot/grub
 mcopy -i "$GRUB_DIR/efi.img" "$GRUB_DIR/grub.cfg" ::/boot/grub/grub.cfg
+# фон, тема и шрифт — и в ESP-раздел (загрузка с флешки), и в ISO9660
+# фирменный фон и шрифт — и в ESP-раздел (загрузка с флешки), и в ISO9660
+cp "$PROJECT_ROOT/branding/unicode.pf2" "$STAGING/boot/grub/unicode.pf2"
+mcopy -i "$GRUB_DIR/efi.img" "$PROJECT_ROOT/branding/unicode.pf2" ::/boot/grub/unicode.pf2
+mcopy -i "$GRUB_DIR/efi.img" "$PROJECT_ROOT/branding/vlanit-grub-bg.png" ::/boot/grub/vlanit-grub-bg.png
+cp "$PROJECT_ROOT/branding/vlanit-grub-bg.png" "$STAGING/boot/grub/vlanit-grub-bg.png"
 cp "$GRUB_DIR/efi.img" "$STAGING/boot/grub/efi.img"
 
 # --- ISO ---

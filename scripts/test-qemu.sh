@@ -152,7 +152,8 @@ test_boot() {
     make_test_iso "$TESTDIR/t1.iso" /autoinstall.yaml=tests/integration/autoinstall.yaml
     rm -f "$TESTDIR/${name}_serial.log"
     run_qemu "$name" "$TESTDIR/t1.iso" "-"
-    sleep 7; shot "00-grub-menu" "$name"   # меню загрузки GRUB
+    # серия кадров: меню GRUB показывается ~5 с с момента старта ВМ
+    for t in 3 4 5 6 7 8; do sleep 1; shot "00-grub-t${t}s" "$name"; done
     if wait_serial "$TESTDIR/${name}_serial.log" "обнаружен autoinstall" 300; then
         sleep 10; shot "01-installer-running" "$name"
         pass "T1: UEFI-загрузка live-среды и запуск VLANit Installer"

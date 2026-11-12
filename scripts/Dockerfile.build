@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         squashfs-tools \
         grub-efi-amd64-bin \
         grub-pc-bin \
+        grub-common \
         mtools \
         zstd \
         cpio \
