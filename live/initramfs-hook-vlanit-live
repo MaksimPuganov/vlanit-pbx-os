@@ -17,9 +17,10 @@ copy_exec /bin/busybox /bin/busybox
 cp /opt/vlanit/vlanit-init "$DESTDIR/init"
 chmod 755 "$DESTDIR/init"
 
-# модули: ФС live-среды + типовые контроллеры дисков/приводов
+# модули: ФС live-среды + USB-контроллеры/накопители + типовые контроллеры дисков
 for m in \
     squashfs isofs loop overlay \
+    usbcore usb-storage uas xhci-hcd xhci-pci \
     sr_mod cdrom \
     virtio_blk virtio_scsi virtio_net \
     sd_mod ahci libahci nvme nvme-core \

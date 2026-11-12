@@ -16,15 +16,16 @@ set +e
 
 log() { echo "vlanit-init: $*"; }
 
-# --- загрузка драйверов хранилищ и ФС (в initramfs нет udev) ---
-for m in cdrom sr_mod ahci libahci ata_piix sd_mod \
+# --- загрузка драйверов хранилищ и USB (в initramfs нет udev) ---
+for m in usbcore usb-storage uas xhci-hcd xhci-pci \
+         cdrom sr_mod ahci libahci ata_piix sd_mod \
          virtio_blk virtio_scsi virtio_net nvme nvme-core \
          loop squashfs overlay isofs; do
     /bin/busybox modprobe "$m" 2>/dev/null || true
 done
-# дать devtmpfs время создать узлы устройств
+# дать devtmpfs время создать узлы устройств (USB-флешки появляются позже)
 for i in 1 2 3 4 5 6 7 8 9 10; do
-    [ -e /dev/sr0 ] && break
+    [ -e /dev/sr0 ] || [ -e /dev/sda ] && break
     sleep 1
 done
 
@@ -38,15 +39,26 @@ iso_label_of() {
 
 ISO_DEV=""
 /bin/busybox mkdir -p /mnt/iso
-for d in /dev/sr0 /dev/sr1 /dev/cdrom /dev/sr*; do
-    [ -b "$d" ] || continue
-    if [ "$(iso_label_of "$d")" = "VLANIT_PBX_OS" ]; then
-        ISO_DEV="$d"; break
-    fi
+# USB-накопители «прогреваются» несколько секунд (media ready) — сканируем
+# с повторами: приоритет оптические приводы, затем USB/SATA/NVMe диски.
+scan_iso() {
+    for d in /dev/sr0 /dev/sr1 /dev/cdrom /dev/sr* /dev/sd* /dev/vd* /dev/nvme*n*; do
+        [ -b "$d" ] || continue
+        if [ "$(iso_label_of "$d")" = "VLANIT_PBX_OS" ]; then
+            ISO_DEV="$d"; return 0
+        fi
+    done
+    return 1
+}
+attempt=0
+while [ "$attempt" -lt 8 ]; do
+    scan_iso && break
+    attempt=$((attempt + 1))
+    sleep 2
 done
 # fallback: смонтировать кандидатов и проверить наличие rootfs
 if [ -z "$ISO_DEV" ]; then
-    for d in /dev/sr0 /dev/sr1 /dev/cdrom /dev/sr*; do
+    for d in /dev/sr0 /dev/sr1 /dev/cdrom /dev/sr* /dev/sd* /dev/vd*; do
         [ -b "$d" ] || continue
         if /bin/busybox mount -t iso9660 -o ro "$d" /mnt/iso 2>/dev/null \
            && [ -f /mnt/iso/live/rootfs.squashfs ]; then

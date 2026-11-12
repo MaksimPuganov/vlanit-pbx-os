@@ -46,7 +46,8 @@ done
 grub-mkimage -O x86_64-efi \
     -p /boot/grub \
     -o "$GRUB_DIR/bootx64.efi" \
-    part_gpt part_msdos iso9660 normal linux echo test all_video search search_fs_uuid search_label configfile
+    part_gpt part_msdos iso9660 fat normal linux echo test all_video \
+    search search_fs_uuid search_label configfile
 
 # --- ESP-образ (FAT16) с BOOTX64.EFI ---
 log "EFI System Partition image (efi.img)"

@@ -49,10 +49,12 @@ done
 
 check "mikopbx-service-active" systemctl is-active --quiet mikopbx.service
 
-# веб-интерфейс (HTTPS, self-signed)
+# веб-интерфейс (HTTPS, self-signed) — через ВНЕШНИЙ адрес устройства,
+# а не loopback: интерфейс должен быть доступен из сети
+EXT_IP="$(ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -1)"
 web=0
 for i in $(seq 1 24); do
-    if curl -sk --max-time 5 https://127.0.0.1/ -o /dev/null -w '%{http_code}' | grep -qE '200|301|302'; then
+    if curl -sk --max-time 5 "https://${EXT_IP:-127.0.0.1}/" -o /dev/null -w '%{http_code}' | grep -qE '200|301|302'; then
         web=1; break
     fi
     sleep 5

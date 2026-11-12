@@ -104,8 +104,18 @@ run_qemu() {
         -monitor "unix:$TESTDIR/${name}.monitor,server,nowait"
         -display none -pidfile "$TESTDIR/${name}.pid" -daemonize
     )
-    [ "$iso" != "-" ]  && args+=( -cdrom "$iso" )
     [ "$disk" != "-" ] && args+=( -drive "file=$disk,if=virtio,format=qcow2" )
+    if [ "$iso" != "-" ]; then
+        if [ "${MEDIA:-usb}" = "usb" ]; then
+            # реалистичный путь железа: ISO записан на флешку (dd) и
+            # подключён как USB-накопитель; UEFI грузит ESP-раздел (FAT)
+            args+=( -device qemu-xhci,id=xhci
+                    -drive "file=$iso,if=none,id=instiso,format=raw"
+                    -device "usb-storage,drive=instiso" )
+        else
+            args+=( -cdrom "$iso" )
+        fi
+    fi
     qemu-system-x86_64 "${args[@]}" "$@"
 }
 
