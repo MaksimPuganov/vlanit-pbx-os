@@ -1,6 +1,14 @@
 # Спецификация: CI-сборка ISO (1.2)
 
-Статус: принято. Приоритет: низкий.
+Статус: **workflow готов** (локально), публикация требует scope `workflow`.
+
+## 0. As-built
+
+- Файл `.github/workflows/build-iso.yml` готов и проверен, но **не закоммичен**:
+  push workflow-файлов требует токена GitHub со scope `workflow` (ограничение
+  OAuth Apps). Инструкция для публикации: `docs/ci-workflow-publish.md`.
+- Docker-образ сборки `scripts/Dockerfile.build` (включён в репозиторий,
+  Docker Hub не используется).
 
 ## 1. Workflow
 

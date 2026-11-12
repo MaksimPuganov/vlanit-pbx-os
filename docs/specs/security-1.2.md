@@ -1,6 +1,16 @@
 # Спецификация: меры безопасности (1.2)
 
-Статус: принято. Приоритет: средний.
+Статус: **реализовано** (1.2.0, подтверждено 3 проверками агента на 1.2.1).
+
+## 0. As-built
+
+- fail2ban: бэкенд **`systemd`** (чтение journald), а не nftables — в системе
+  нет rsyslog, `/var/log/auth.log` не существует. Джейл `[sshd]`
+  (`/etc/fail2ban/jail.d/vlanit-sshd.conf`): maxretry 5, bantime 1h.
+- Контроль стандартного пароля MikoPBX — в `vlanit-firstboot` (после старта
+  контейнера): при пустом `WEB_ADMIN_PASSWORD` пробуется логин admin/admin
+  через API с localhost; при успехе — предупреждение в журнал и MOTD.
+  Автоматическая смена пароля не выполняется (конфликтует с env-provisioning).
 
 ## 1. unattended-upgrades
 
