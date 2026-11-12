@@ -85,9 +85,11 @@ EOF
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=5
 GRUB_DISTRIBUTOR="VLANit PBX OS"
-GRUB_CMDLINE_LINUX_DEFAULT="quiet console=tty0 console=ttyS0,115200"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash console=tty0 console=ttyS0,115200"
 GRUB_CMDLINE_LINUX="$kernel_args"
 GRUB_DISABLE_OS_PROBER=true
+GRUB_COLOR_NORMAL="white/black"
+GRUB_COLOR_HIGHLIGHT="black/yellow"
 EOF
 
     # локальный администратор (chroot)

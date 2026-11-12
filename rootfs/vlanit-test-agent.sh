@@ -88,6 +88,9 @@ check "security-unattended-upgrades" sh -c "unattended-upgrades --dry-run >/dev/
 check "security-root-ssh-denied" sh -c "sshd -T 2>/dev/null | grep -qi '^permitrootlogin no' || grep -rqi '^PermitRootLogin no' /etc/ssh/sshd_config.d/"
 check "security-fail2ban" sh -c "systemctl is-active --quiet fail2ban && fail2ban-client status sshd >/dev/null 2>&1"
 
+# --- брендинг: фирменная тема Plymouth ---
+check "plymouth-theme-vlanit" grep -q "Theme=vlanit" /etc/plymouth/plymouthd.conf
+
 # --- перезагрузка и проверка сохранения (Т4: автозапуск после reboot) ---
 if [ "$fail" -eq 0 ] && [ ! -f /var/spool/mikopbx/storage/.vlanit-reboot-marker ]; then
     date -Is > /var/spool/mikopbx/storage/.vlanit-reboot-marker

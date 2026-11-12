@@ -28,6 +28,7 @@ iptables nftables
 wireguard-tools
 logrotate
 unattended-upgrades fail2ban
+plymouth plymouth-themes
 "
 
 log "mmdebstrap: Debian 13 (trixie) minimal rootfs"
@@ -88,6 +89,26 @@ install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-ssh-01-vlanit.conf" \
     "$ROOTFS/etc/ssh/sshd_config.d/01-vlanit.conf"
 install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-fail2ban-vlanit-sshd.conf" \
     "$ROOTFS/etc/fail2ban/jail.d/vlanit-sshd.conf"
+
+# Plymouth: фирменная тема VLANit (на базе spinner: анимация и диалоги
+# копируются из установленного пакета, фон/цвета — бренд, watermark — логотип)
+PLY_THEME="$ROOTFS/usr/share/plymouth/themes/vlanit"
+mkdir -p "$PLY_THEME"
+cp "$ROOTFS"/usr/share/plymouth/themes/spinner/*.png "$PLY_THEME/"
+install -D -m 0644 "$PROJECT_ROOT/branding/vlanit.plymouth" \
+    "$PLY_THEME/vlanit.plymouth"
+python3 - "$PROJECT_ROOT/branding/vlanit-logo-on-dark.svg" \
+    "$PLY_THEME/watermark.png" <<'PYEOF'
+import sys
+import cairosvg
+cairosvg.svg2png(url=sys.argv[1], write_to=sys.argv[2],
+                 output_width=360, background_color="rgba(0,0,0,0)")
+PYEOF
+cat > "$ROOTFS/etc/plymouth/plymouthd.conf" <<'EOF'
+[Daemon]
+Theme=vlanit
+ShowDelay=0
+EOF
 
 # first-boot служба
 install -D -m 0644 "$PROJECT_ROOT/rootfs/vlanit-firstboot.service" \

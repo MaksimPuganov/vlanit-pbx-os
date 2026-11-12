@@ -1,0 +1,33 @@
+[Plymouth Theme]
+Name=VLANit
+Description=VLANit PBX OS — фирменная тема (на базе spinner, логотип vlanit.com)
+ModuleName=two-step
+
+[two-step]
+Font=DejaVu Sans 12
+TitleFont=DejaVu Sans 30
+ImageDir=/usr/share/plymouth/themes/vlanit
+DialogHorizontalAlignment=.5
+DialogVerticalAlignment=.382
+TitleHorizontalAlignment=.5
+TitleVerticalAlignment=.382
+HorizontalAlignment=.5
+VerticalAlignment=.7
+WatermarkHorizontalAlignment=.5
+WatermarkVerticalAlignment=.9
+Transition=none
+TransitionDuration=0.0
+BackgroundStartColor=0x09090b
+BackgroundEndColor=0x121214
+ProgressBarBackgroundColor=0x2a2a2e
+ProgressBarForegroundColor=0xd4aa6a
+MessageBelowAnimation=true
+
+[boot-up]
+UseEndAnimation=false
+
+[shutdown]
+UseEndAnimation=false
+
+[reboot]
+UseEndAnimation=false
