@@ -86,7 +86,8 @@ fstab генерируется по UUID. Монтирование: `compress=zs
 Декларативная схема VLANit (YAML, `schema_version: 1`), валидация —
 `provisioning/vlanit-provision` (python3-yaml):
 
-- **System**: hostname, network (DHCP/static), ssh, storage, container.
+- **System**: hostname, network (DHCP/static), ssh, storage, container,
+  wireguard (enabled, address, listen_port, peers).
 - **PBX**: только подтверждённые переменные окружения MikoPBX
   (PBX_NAME, WEB_ADMIN_*, порты и др., см. docs/mikopbx-research.md §3).
   Они применяются механизмом DockerCloud при каждом старте контейнера

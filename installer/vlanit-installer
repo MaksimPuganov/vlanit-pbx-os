@@ -5,7 +5,7 @@ set -Eeuo pipefail
 
 export LC_ALL=ru_RU.UTF-8
 INSTALLER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-for lib in common hardware disk network deploy; do
+for lib in common hardware disk network deploy wireguard; do
     # shellcheck disable=SC1090
     . "$INSTALLER_DIR/lib/$lib.sh"
 done
@@ -110,13 +110,35 @@ apply_live_network "$NET_IFACE" "$NET_MODE" "$NET_ADDR" "$NET_GW" "$NET_DNS"
 
 # --- Системные параметры ---
 SYS_HOSTNAME="vlanit-pbx" ADMIN_USER="vlanit" ADMIN_PASS="" SSH_ENABLED="yes" TZ_NAME="UTC"
+WG_ENABLED="no" WG_ADDR="10.66.66.1/24" WG_PORT="51820" WG_PEERS_FILE=""
 if [ -n "$AUTOMODE" ]; then
     SYS_HOSTNAME="$(yaml_get "$AUTO_FILE" hostname vlanit-pbx)"
     ADMIN_USER="$(yaml_get "$AUTO_FILE" admin.user vlanit)"
     ADMIN_PASS="$(yaml_get "$AUTO_FILE" admin.password "")"
-    SSH_ENABLED="$(yaml_get "$AUTO_FILE" ssh.enabled yes)"
+    SSH_ENABLED="$(yaml_get "$AUTO_FILE" ssh.enabled yes | tr 'A-Z' 'a-z')"
+    case "$SSH_ENABLED" in yes|true) SSH_ENABLED="yes" ;; *) SSH_ENABLED="no" ;; esac
     TZ_NAME="$(yaml_get "$AUTO_FILE" timezone UTC)"
     [ -n "$ADMIN_PASS" ] || die "autoinstall: задайте admin.password"
+    WG_ENABLED="$(yaml_get "$AUTO_FILE" wireguard.enabled no | tr 'A-Z' 'a-z')"
+    WG_ADDR="$(yaml_get "$AUTO_FILE" wireguard.address 10.66.66.1/24)"
+    WG_PORT="$(yaml_get "$AUTO_FILE" wireguard.listen_port 51820)"
+    if [ "$WG_ENABLED" = "yes" ] || [ "$WG_ENABLED" = "true" ]; then
+        WG_ENABLED="yes"        # peers: список {public_key, allowed_ips} → [Peer]-блоки
+        WG_PEERS_FILE="$(mktemp)"
+        python3 - "$AUTO_FILE" > "$WG_PEERS_FILE" <<'PYEOF'
+import sys, yaml
+data = yaml.safe_load(open(sys.argv[1])) or {}
+for peer in (data.get("wireguard", {}).get("peers") or []):
+    pk = peer.get("public_key", "").strip()
+    ips = peer.get("allowed_ips", "").strip()
+    if pk:
+        print("[Peer]")
+        print(f"PublicKey = {pk}")
+        if ips:
+            print(f"AllowedIPs = {ips}")
+        print()
+PYEOF
+    fi
 else
     SYS_HOSTNAME="$(dialog --title "Экран 4. Параметры системы" --inputbox "Hostname:" 8 60 "vlanit-pbx" --stdout)" || exit 1
     ADMIN_USER="$(dialog --title "Локальный администратор" --inputbox "Имя пользователя:" 8 60 "vlanit" --stdout)" || exit 1
@@ -124,6 +146,13 @@ else
     [ "${#ADMIN_PASS}" -ge 8 ] || { dialog --msgbox "Пароль короче 8 символов." 7 50; exit 1; }
     c="$(dialog --title "SSH" --menu "SSH-сервер:" 9 60 3 1 "Включить" 2 "Отключить" --stdout)" || exit 1
     [ "$c" = "2" ] && SSH_ENABLED="no"
+    c="$(dialog --title "WireGuard VPN" --menu "Настроить WireGuard (своя пара ключей, автозапуск):" \
+        9 64 3 1 "Да, включить" 2 "Нет" --stdout)" || exit 1
+    if [ "$c" = "1" ]; then
+        WG_ENABLED="yes"
+        WG_ADDR="$(dialog --title "WireGuard" --inputbox "Адрес интерфейса wg0 (CIDR):" \
+            8 60 "10.66.66.1/24" --stdout)" || exit 1
+    fi
 fi
 
 # --- MikoPBX ---
@@ -195,10 +224,15 @@ create_filesystems "$TARGET_DISK"
 deploy_golden "$TARGET_DISK"
 configure_target_system "$SYS_HOSTNAME" "$ADMIN_USER" "$ADMIN_PASS" "$SSH_ENABLED" "$TZ_NAME" "$KERNEL_ARGS"
 write_target_network "$SYS_MNT" "$NET_IFACE" "$NET_MODE" "$NET_ADDR" "$NET_GW" "$NET_DNS"
+if [ "$WG_ENABLED" = "yes" ]; then
+    configure_target_wireguard "$WG_ADDR" "$WG_PORT" "$WG_PEERS_FILE"
+fi
 configure_target_mikopbx "$PBX_NAME" "$PBX_ADMIN_LOGIN" "$PBX_ADMIN_PASS"
 import_mikopbx_image
 post_install_report "$TARGET_DISK"
 install_bootloader
+WG_PUBKEY=""
+[ "$WG_ENABLED" = "yes" ] && WG_PUBKEY="$(wireguard_pubkey)"
 unmount_target
 
 # базовый snapshot после установки
@@ -228,7 +262,16 @@ MikoPBX: 2026.6.99
 Hostname: $SYS_HOSTNAME
 IP-адрес: $IP_ADDR
 Статус MikoPBX: будет запущена автоматически при первой загрузке
-Веб-интерфейс: https://$IP_ADDR (логин: $PBX_ADMIN_LOGIN)
+Веб-интерфейс: https://$IP_ADDR (логин: $PBX_ADMIN_LOGIN)"
+
+if [ -n "$WG_PUBKEY" ]; then
+    finish_text="$finish_text
+WireGuard: включён ($WG_ADDR, порт $WG_PORT)
+Публичный ключ устройства (добавьте на пир):
+$WG_PUBKEY"
+fi
+
+finish_text="$finish_text
 
 Извлеките установочный USB и перезагрузите устройство."
 

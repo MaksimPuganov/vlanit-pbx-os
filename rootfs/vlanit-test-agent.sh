@@ -73,6 +73,14 @@ fi
 # persistence конфигурации MikoPBX (env provisioning применён в БД)
 check "mikopbx-cf-nonempty" sh -c "test -n \"\$(ls -A /var/spool/mikopbx/cf 2>/dev/null)\""
 
+# --- WireGuard (если включён установщиком) ---
+if systemctl is-enabled --quiet wg-quick@wg0.service 2>/dev/null; then
+    check "wireguard-service-enabled" systemctl is-enabled --quiet wg-quick@wg0.service
+    systemctl start wg-quick@wg0.service 2>/dev/null || true
+    check "wireguard-interface-up" sh -c "wg show wg0 | grep -q interface"
+    check "wireguard-address" sh -c "ip -4 -o addr show dev wg0 | grep -q '10\.66\.66\.'"
+fi
+
 # --- перезагрузка и проверка сохранения (Т4: автозапуск после reboot) ---
 if [ "$fail" -eq 0 ] && [ ! -f /var/spool/mikopbx/storage/.vlanit-reboot-marker ]; then
     date -Is > /var/spool/mikopbx/storage/.vlanit-reboot-marker

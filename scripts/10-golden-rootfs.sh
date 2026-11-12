@@ -25,6 +25,7 @@ python3 python3-minimal python3-yaml
 tzdata kbd
 iproute2 iputils-ping ethtool pciutils usbutils smartmontools nvme-cli dmidecode
 iptables nftables
+wireguard-tools
 logrotate
 "
 
@@ -47,6 +48,18 @@ install -D -m 0644 "$PROJECT_ROOT/quadlet/mikopbx.container" \
     "$ROOTFS/etc/containers/systemd/mikopbx.container"
 install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-containers-registries.conf" \
     "$ROOTFS/etc/containers/registries.conf"
+
+# брендинг ОС
+install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-os-release" \
+    "$ROOTFS/usr/lib/os-release"
+install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-os-release" \
+    "$ROOTFS/etc/os-release"
+install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-issue" \
+    "$ROOTFS/etc/issue"
+install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-issue" \
+    "$ROOTFS/etc/issue.net"
+install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-motd" \
+    "$ROOTFS/etc/motd"
 
 # first-boot служба
 install -D -m 0644 "$PROJECT_ROOT/rootfs/vlanit-firstboot.service" \

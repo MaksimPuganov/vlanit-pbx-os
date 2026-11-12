@@ -12,7 +12,7 @@ set -Eeuo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-ISO="dist/VLANit-PBX-1.0-amd64.iso"
+ISO="dist/VLANit-PBX-1.1-amd64.iso"
 STAGING="build/iso-staging"
 EFI_IMG="build/grub/efi.img"
 # изолированный каталог на каждый запуск (защита от параллельных/старых прогонов)
@@ -50,7 +50,7 @@ make_test_iso() {
     while [ $# -gt 0 ]; do maps+=( "${1%%=*}=${1#*=}" ); shift; done
     # graft-points: iso_path=host_path
     "$XORRISO" -as mkisofs \
-        -V VLANIT_PBX_OS -A "VLANit PBX OS 1.0 test" \
+        -V VLANIT_PBX_OS -A "VLANit PBX OS 1.1 test" \
         -graft-points \
         -o "$out" \
         -e boot/grub/efi.img -no-emul-boot \

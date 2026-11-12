@@ -20,4 +20,9 @@ mikopbx:
   web_admin_login: admin
   web_admin_password: "admin12345"
 
+wireguard:
+  enabled: true
+  address: 10.66.66.1/24
+  listen_port: 51820
+
 confirm: yes

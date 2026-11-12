@@ -8,7 +8,7 @@ BUILD_DIR="$PROJECT_ROOT/build"
 STAGING="$BUILD_DIR/iso-staging"
 GRUB_DIR="$BUILD_DIR/grub"
 DIST_DIR="$PROJECT_ROOT/dist"
-ISO_NAME="VLANit-PBX-1.0-amd64.iso"
+ISO_NAME="VLANit-PBX-1.1-amd64.iso"
 mkdir -p "$STAGING/boot/grub" "$GRUB_DIR" "$DIST_DIR"
 
 log() { printf '[iso] %s\n' "$*"; }
@@ -24,12 +24,12 @@ insmod iso9660
 
 search --no-floppy --set=root --label VLANIT_PBX_OS
 
-menuentry "Установить VLANit PBX OS 1.0 (UEFI)" --class debian --class gnu-linux {
+menuentry "Установить VLANit PBX OS 1.1 (UEFI)" --class debian --class gnu-linux {
     linux /live/vmlinuz ro quiet loglevel=3 console=tty0 console=ttyS0,115200
     initrd /live/initrd
 }
 
-menuentry "Установить VLANit PBX OS 1.0 (режим отладки)" {
+menuentry "Установить VLANit PBX OS 1.1 (режим отладки)" {
     linux /live/vmlinuz ro loglevel=7 VLANIT_DEBUG=1 console=tty0 console=ttyS0,115200
     initrd /live/initrd
 }
@@ -69,7 +69,7 @@ ISO_PATH="$DIST_DIR/$ISO_NAME"
 rm -f "$ISO_PATH"
 xorriso -as mkisofs \
     -V VLANIT_PBX_OS \
-    -A "VLANit PBX OS 1.0" \
+    -A "VLANit PBX OS 1.1" \
     -quiet \
     -o "$ISO_PATH" \
     -e boot/grub/efi.img -no-emul-boot \

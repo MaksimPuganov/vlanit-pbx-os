@@ -1,0 +1,9 @@
+VLANit PBX OS 1.1.0 — Debian 13 + Podman + MikoPBX
+
+Полезные команды:
+  systemctl status mikopbx      — состояние контейнера MikoPBX
+  podman logs mikopbx           — журнал MikoPBX
+  vlanit-snapshot list          — снапшоты Btrfs
+  journalctl -u vlanit-firstboot — журнал первичной настройки
+
+Документация: https://github.com/MaksimPuganov/vlanit-pbx-os

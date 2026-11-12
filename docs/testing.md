@@ -31,7 +31,21 @@ bash scripts/test-qemu.sh all
 агент перезагружает устройство и проверяет сохранение данных и автозапуск
 MikoPBX (REBOOT_TEST_PASS).
 
-## Фактические результаты (2026-11-12, ISO VLANit-PBX-1.0-amd64)
+## Фактические результаты
+
+### Прогон 2026-11-12, ISO VLANit-PBX-1.1-amd64.iso (WireGuard + брендинг)
+
+| Тест | Результат |
+|---|---|
+| Т1 Загрузка ISO (UEFI) | PASS |
+| Т2 Установка системы | PASS |
+| Т3 Первая загрузка | PASS |
+| Т4 MikoPBX | PASS (19 проверок агента: 16 базовых + wireguard-service-enabled, wireguard-interface-up, wireguard-address; REBOOT_TEST_PASS) |
+| Т5 Offline | PASS |
+| Т6 Btrfs | PASS |
+| Т7a–d Ошибки | PASS |
+
+### Прогон 2026-11-12, ISO VLANit-PBX-1.0-amd64.iso (базовый)
 
 | Тест | Результат | Подтверждение |
 |---|---|---|
@@ -46,9 +60,8 @@ MikoPBX (REBOOT_TEST_PASS).
 | Т7c повреждённый payload | PASS | отказ по SHA256 до разметки |
 | Т7d установка без NIC | PASS | установка завершена успешно |
 
-Итог агента: `RESULT PASS (16 checks)`, `VLANIT_TEST_PASS`, `REBOOT_TEST_PASS`.
-Логи прогонов: `build/qemu/<run>/`, сводки `build/qemu_t1.log`, `build/qemu_last_run5.log`,
-`build/qemu_t5.log`, `build/qemu_t7.log`.
+Итог агента (1.0): `RESULT PASS (16 checks)`, `VLANIT_TEST_PASS`, `REBOOT_TEST_PASS`.
+Логи прогонов: `build/qemu/<run>/`, сводки `build/qemu*_t*.log`.
 
 ## Состав проверок агента (16)
 

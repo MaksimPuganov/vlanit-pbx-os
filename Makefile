@@ -30,4 +30,4 @@ help:
 	@echo ""
 	@echo "Ключевые артефакты:"
 	@echo "  build/payload/mikopbx.tar.zst — контейнерный образ MikoPBX"
-	@echo "  dist/VLANit-PBX-1.0-amd64.iso — итоговый ISO"
+	@echo "  dist/VLANit-PBX-1.1-amd64.iso — итоговый ISO"

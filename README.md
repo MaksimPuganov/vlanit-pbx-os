@@ -2,10 +2,16 @@
 
 Собственный установочный ISO для автоматического развёртывания MikoPBX
 на физических x86-64 устройствах: Debian 13 (trixie) Minimal + Podman +
-MikoPBX в контейнере + Btrfs со снапшотами. Установка полностью автономна
-(интернет на целевом устройстве не требуется).
+MikoPBX в контейнере + Btrfs со снапшотами + преднастроенный WireGuard.
+Установка полностью автономна (интернет на целевом устройстве не требуется).
 
 Это самостоятельный продукт: VLANit Portal и его зависимости в состав не входят.
+
+## Возможности 1.1
+
+- WireGuard VPN: своя пара ключей при установке, wg0 с автозапуском,
+  форвардинг, публичный ключ показывается на экране завершения.
+- Брендинг ОС: os-release, консольные баннеры, меню GRUB.
 
 ## Требования к сборочной машине
 
@@ -35,7 +41,7 @@ bash scripts/test-qemu.sh all        # все сценарии
 bash scripts/test-qemu.sh install    # только установка/загрузка/MikoPBX
 
 # запись на USB (требует root, ДЕСТРУКТИВНО)
-sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.0-amd64.iso /dev/sdX
+sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.1-amd64.iso /dev/sdX
 # другие способы (dd, GNOME Disks, KDE ISO Image Writer, Rufus, balenaEtcher,
 # macOS dd, Ventoy) — docs/installation.md, раздел «Создание загрузочной флэшки»
 
@@ -46,8 +52,8 @@ make clean          # очистка build/{rootfs,live,iso-staging}, dist
 
 | Путь | Назначение |
 |---|---|
-| `dist/VLANit-PBX-1.0-amd64.iso` | итоговый загрузочный ISO (UEFI) |
-| `dist/VLANit-PBX-1.0-amd64.iso.sha256` | контрольная сумма |
+| `dist/VLANit-PBX-1.1-amd64.iso` | итоговый загрузочный ISO (UEFI) |
+| `dist/VLANit-PBX-1.1-amd64.iso.sha256` | контрольная сумма |
 | `build/payload/mikopbx-*.tar.zst` | экспортированный образ MikoPBX (+sha256) |
 | `build/payload/golden.tar.zst` | Golden Image устанавливаемой системы |
 | `build/logs/` | журналы шагов сборки |
