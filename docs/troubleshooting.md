@@ -39,9 +39,26 @@
 
 - `findmnt /` — btrfs; `btrfs subvolume list /`.
 - `vlanit-snapshot create before-update`, `vlanit-snapshot list`.
-- Rollback: смонтировать нужный subvolume из `/.snapshots` и скопировать
-  данные вручную при остановленном контейнере. Автоматический rollback БД
-  MikoPBX не реализован намеренно (см. architecture.md).
+- Rollback: корневой subvolume переносится (mv), из снапшота создаётся
+  новый — перезагрузка обязательна.
+
+## OTA-обновления и откат
+
+- `vlanit-update [пакет]` — сканирует USB (или `--online`), проверяет
+  GPG-подпись, совместимость версий и SHA256, делает снапшот `pre-update`,
+  применяет обновление, проверяет готовность MikoPBX.
+- `vlanit-rollback [снапшот]` — возвращает систему (включая данные АТС)
+  к состоянию снапшота, перезагружает устройство.
+- Пакет обновления собирается `scripts/build-update-package.sh`
+  (нужен приватный ключ релиза, хранится вне репозитория).
+- Журналы: `/var/log/vlanit-update.log`, `/var/log/vlanit-backup.log`.
+
+## Бэкап на USB
+
+- `vlanit-backup` — останавливает MikoPBX, пишет tar.zst (cf + storage +
+  /etc) на USB, запускает контейнер обратно, проверяет health.
+- Восстановление: остановить контейнер, распаковать `data.tar.zst`
+  с корня (`tar -C / --zstd -xf`), запустить контейнер.
 
 ## systemd
 

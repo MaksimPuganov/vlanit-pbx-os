@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# vlanit-rollback — откат системы из read-only Btrfs-снапшота.
+#
+# vlanit-rollback [имя-снапшота]   (без аргумента — интерактивный выбор)
+set -Eeuo pipefail
+
+SYS_LABEL="vlanit-system"
+DATA_LABEL="vlanit-data"
+SYS_MNT="/mnt/.vlanit-rollback-sys"
+DATA_MNT="/mnt/.vlanit-rollback-data"
+SYS_CONTAINER="@snapshots"
+DATA_CONTAINER=".snapshots"
+
+die() { echo "vlanit-rollback: ОШИБКА: $*" >&2; exit 2; }
+[ "$(id -u)" -eq 0 ] || die "требуется root"
+
+SNAP="$1"
+if [ -z "$SNAP" ]; then
+    mkdir -p "$SYS_MNT"
+    mountpoint -q "$SYS_MNT" || mount -o subvolid=5 LABEL="$SYS_LABEL" "$SYS_MNT"
+    echo "Доступные снапшоты (System):"
+    ls "$SYS_MNT/$SYS_CONTAINER/" 2>/dev/null || die "снапшоты не найдены"
+    echo
+    read -r -p "Введите имя снапшота (например $(ls "$SYS_MNT/$SYS_CONTAINER/" | grep pre-update | head -1)): " SNAP
+    umount "$SYS_MNT" 2>/dev/null || true
+fi
+[ -n "$SNAP" ] || die "имя снапшота не задано"
+
+cat <<EOF
+ВНИМАНИЕ: будет выполнен откат системы из снапшота '$SNAP'.
+- контейнер MikoPBX будет остановлен;
+- системные файлы и данные АТС вернутся к состоянию на момент снапшота;
+- изменения в /cf и /storage после снапшота будут потеряны;
+- устройство будет перезагружено.
+EOF
+if [ -t 0 ] && [ "${VLANIT_ASSUME_YES:-0}" != "1" ]; then
+    read -r -p "Продолжить? Введите YES: " confirm
+    [ "$confirm" = "YES" ] || { echo "отменено"; exit 0; }
+fi
+
+mkdir -p "$SYS_MNT" "$DATA_MNT"
+mount -o subvolid=5 LABEL="$SYS_LABEL" "$SYS_MNT"
+mount -o subvolid=5 LABEL="$DATA_LABEL" "$DATA_MNT"
+
+# остановка телефонии
+systemctl stop mikopbx.service 2>/dev/null || true
+podman stop mikopbx 2>/dev/null || true
+
+restore() {  # $1 mount  $2 subvol  $3 container  $4 имя префикса
+    local mnt="$1" sub="$2" cont="$3" prefix="$4"
+    local snap_path="$mnt/$cont/${SNAP}-${prefix}"
+    [ -d "$snap_path" ] || die "снапшот не найден: $snap_path"
+    echo "восстановление $sub из $snap_path"
+    # subvolume может быть смонтирован — удалять нельзя, переименовываем
+    mv "$mnt/$sub" "$mnt/$sub.rolled-back-$(date +%Y%m%d-%H%M%S)"
+    btrfs subvolume snapshot "$snap_path" "$mnt/$sub" >/dev/null
+}
+
+restore "$SYS_MNT" "@" "$SYS_CONTAINER" "@"
+restore "$SYS_MNT" "@var_log" "$SYS_CONTAINER" "var_log"
+restore "$DATA_MNT" "mikopbx-cf" "$DATA_CONTAINER" "mikopbx-cf"
+restore "$DATA_MNT" "mikopbx-storage" "$DATA_CONTAINER" "mikopbx-storage"
+
+umount "$DATA_MNT" "$SYS_MNT"
+sync
+echo "Откат завершён. Перезагрузка через 5 секунд…"
+sleep 5
+reboot

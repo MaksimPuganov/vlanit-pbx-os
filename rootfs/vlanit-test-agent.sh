@@ -81,6 +81,11 @@ if systemctl is-enabled --quiet wg-quick@wg0.service 2>/dev/null; then
     check "wireguard-address" sh -c "ip -4 -o addr show dev wg0 | grep -q '10\.66\.66\.'"
 fi
 
+# --- безопасность (1.2) ---
+check "security-unattended-upgrades" sh -c "unattended-upgrades --dry-run >/dev/null 2>&1 || unattended-upgrades --dry-run -d >/dev/null 2>&1"
+check "security-root-ssh-denied" sh -c "sshd -T 2>/dev/null | grep -qi '^permitrootlogin no' || grep -rqi '^PermitRootLogin no' /etc/ssh/sshd_config.d/"
+check "security-fail2ban" sh -c "systemctl is-active --quiet fail2ban && fail2ban-client status sshd >/dev/null 2>&1"
+
 # --- перезагрузка и проверка сохранения (Т4: автозапуск после reboot) ---
 if [ "$fail" -eq 0 ] && [ ! -f /var/spool/mikopbx/storage/.vlanit-reboot-marker ]; then
     date -Is > /var/spool/mikopbx/storage/.vlanit-reboot-marker

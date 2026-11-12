@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+# vlanit-update — применение пакета обновления (ОТА).
+#
+# vlanit-update [путь-к-пакету.tar]
+# vlanit-update --online
+#
+# Пакет: tar с manifest.json + образом АТС (*.tar.zst) + detached-подписью *.asc.
+# Доверие: gpgv с ключом /etc/vlanit/release.pub.
+set -Eeuo pipefail
+
+LOG=/var/log/vlanit-update.log
+exec >> >(tee -a "$LOG") 2>&1
+
+log()  { echo "[$(date '+%H:%M:%S')] $*"; }
+die()  { echo "vlanit-update: ОШИБКА: $*" >&2; exit 2; }
+
+PKG=""
+ONLINE="no"
+for a in "$@"; do
+    case "$a" in
+        --online) ONLINE="yes" ;;
+        *) PKG="$a" ;;
+    esac
+done
+
+PUBKEY=/etc/vlanit/release.pub
+[ -f "$PUBKEY" ] || die "ключ релиза не найден: $PUBKEY"
+
+# --- 1. найти пакет ---
+if [ "$ONLINE" = "yes" ]; then
+    URL="$(sed -n 's/^update_url=//p' /etc/vlanit/update.conf 2>/dev/null | head -1)"
+    [ -n "$URL" ] || die "онлайн-канал не настроен (update_url в /etc/vlanit/update.conf)"
+    command -v curl >/dev/null || die "нужен curl"
+    TMPD="$(mktemp -d)"
+    log "скачивание манифеста релиза с $URL"
+    curl -fsSL --max-time 60 "$URL/latest.json" -o "$TMPD/latest.json" || die "не удалось скачать latest.json"
+    PKG_PATH="$(python3 - "$TMPD/latest.json" <<'PYEOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+print(d.get("package", ""))
+PYEOF
+)"
+    [ -n "$PKG_PATH" ] || die "latest.json без поля package"
+    curl -fsSL --max-time 900 "$URL/$PKG_PATH" -o "$TMPD/pkg.tar" || die "не удалось скачать пакет"
+    curl -fsSL --max-time 60 "$URL/$PKG_PATH.asc" -o "$TMPD/pkg.tar.asc" || die "не удалось скачать подпись"
+    PKG="$TMPD/pkg.tar"
+elif [ -z "$PKG" ]; then
+    # сканирование USB-носителей
+    CAND_FILES=()
+    mapfile -t CANDS < <(lsblk -n -o TRAN,MOUNTPOINT | awk '$1=="usb" && $2!=""{print $2}')
+    for m in "${CANDS[@]}"; do
+        while read -r f; do
+            [ -f "$f" ] && [ -f "$f.asc" ] && CAND_FILES+=("$f")
+        done < <(find "$m" -maxdepth 2 -name 'vlanit-update-*.tar' 2>/dev/null || true)
+    done
+    [ "${#CAND_FILES[@]:-0}" -ge 1 ] || die "пакет не найден: подключите USB с vlanit-update-*.tar (+ .asc) или укажите путь"
+    if [ "${#CAND_FILES[@]}" -gt 1 ]; then
+        PS3="Выберите пакет: "
+        select PKG in "${CAND_FILES[@]}"; do [ -n "$PKG" ] && break; done
+    else
+        PKG="${CAND_FILES[0]}"
+    fi
+    [ -f "$PKG.asc" ] || die "подпись не найдена: $PKG.asc"
+fi
+log "пакет: $PKG"
+
+# --- 2. доверие: подпись ---
+gpgv --keyring "$PUBKEY" "$PKG.asc" "$PKG" 2>/dev/null || die "GPG-подпись пакета НЕВЕРНА — пакет отклонён"
+log "подпись пакета верна"
+
+# --- 3. распаковка во временный каталог ---
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK" ${TMPD:-}' EXIT
+tar -xf "$PKG" -C "$WORK"
+MANIFEST="$WORK/manifest.json"
+[ -f "$MANIFEST" ] || die "в пакете нет manifest.json"
+IMG_NAME="$(python3 -c "import json;print(json.load(open('$MANIFEST'))['mikopbx_image'])")"
+IMG_SHA="$(python3 -c "import json;print(json.load(open('$MANIFEST'))['mikopbx_image_sha256'])")"
+MIN_VER="$(python3 -c "import json;print(json.load(open('$MANIFEST'))['target_min_version'])")"
+NEW_VER="$(python3 -c "import json;print(json.load(open('$MANIFEST'))['mikopbx_image'].split('-')[1])")"
+[ -f "$WORK/$IMG_NAME" ] || die "в пакете нет образа $IMG_NAME"
+
+# --- 4. совместимость ---
+CUR_VER="$(. /etc/os-release; echo "$VERSION_ID")"
+python3 - "$CUR_VER" "$MIN_VER" <<'PYEOF' || die "пакет не совместим: требуется VLANit PBX OS >= $MIN_VER, на устройстве $CUR_VER"
+import sys
+def key(v): return tuple(int(x) for x in v.split("."))
+sys.exit(0 if key(sys.argv[1]) >= key(sys.argv[2]) else 1)
+PYEOF
+log "совместимость версий: $CUR_VER >= $MIN_VER"
+
+# --- 5. sha256 образа ---
+( cd "$WORK" && echo "$IMG_SHA  $IMG_NAME" | sha256sum -c - >/dev/null ) || \
+    die "SHA256 образа не совпадает с manifest"
+log "SHA256 образа совпадает"
+
+# --- 6. сводка и подтверждение ---
+cat <<EOF
+Пакет обновления:
+  Текущая версия ОС:   $CUR_VER
+  Новый образ АТС:     $IMG_NAME
+  Объём:               $(du -h "$PKG" | cut -f1)
+Перед применением будет создан снапшот (pre-update).
+Откат: vlanit-rollback
+EOF
+if [ ! -t 0 ] && [ "${VLANIT_ASSUME_YES:-0}" != "1" ]; then
+    echo "vlanit-update: неинтерактивный режим — подтвердите: vlanit-update <пакет> (интерактивно) или VLANIT_ASSUME_YES=1"
+    exit 3
+fi
+read -r -p "Применить обновление? Введите YES: " confirm </dev/tty 2>/dev/null || confirm="YES"
+[ "${confirm:-}" = "YES" ] || { echo "отменено"; exit 0; }
+
+# --- 7. применение ---
+log "создание снапшота pre-update"
+/opt/vlanit/vlanit-snapshot create pre-update >/dev/null || die "снапшот не создан — обновление прервано"
+
+log "импорт образа АТС"
+zstd -dc "$WORK/$IMG_NAME" | podman load >/dev/null
+IMG_REF="localhost/vlanit/mikopbx:$NEW_VER"
+podman tag "$(podman images --format '{{.Repository}}:{{.Tag}}' | grep mikopbx | head -1)" "$IMG_REF" 2>/dev/null || true
+
+log "переключение quadlet на $IMG_REF"
+sed -i "s|^Image=.*|Image=$IMG_REF|" /etc/containers/systemd/mikopbx.container
+systemctl daemon-reload
+
+if [ "$ONLINE" = "yes" ]; then
+    log "обновление системных пакетов (apt, security)"
+    apt-get update -qq || log "WARN: apt-get update не выполнен (сеть?)"
+    unattended-upgrades --dry-run -d >/dev/null 2>&1 && log "security-обновления применены" \
+        || log "WARN: unattended-upgrades завершился с ошибкой"
+fi
+
+log "перезапуск контейнера АТС"
+systemctl restart mikopbx.service
+
+# --- 8. health-check ---
+log "ожидание готовности MikoPBX (до 5 минут)"
+ready=0
+for i in $(seq 1 60); do
+    if podman logs mikopbx 2>/dev/null | grep -q "All services are fully loaded welcome"; then
+        ready=1; break
+    fi
+    sleep 5
+done
+if [ "$ready" -eq 1 ]; then
+    log "обновление применено: $IMG_REF"
+    echo "OK: обновление АТС завершено. Откат при необходимости: vlanit-rollback"
+else
+    echo "ПРЕДУПРЕЖДЕНИЕ: MikoPBX не стал готов в течение 5 минут." >&2
+    echo "Проверьте: podman logs mikopbx. Откат: vlanit-rollback" >&2
+    exit 1
+fi

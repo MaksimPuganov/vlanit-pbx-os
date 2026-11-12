@@ -1,0 +1,28 @@
+# Профиль автоматической установки для QEMU-тестов (tests/integration).
+# НЕ использовать на реальном железе: подтверждение заменено confirm: yes.
+disk: /dev/vda
+hostname: vlanit-pbx-test
+timezone: UTC
+kernel_args: "VLANIT_TEST=ota console=ttyS0,115200 console=tty0"
+
+network:
+  mode: dhcp
+
+admin:
+  user: vlanit
+  password: "vlanit-test-pass-123"
+
+ssh:
+  enabled: true
+
+mikopbx:
+  name: VLANit-Test
+  web_admin_login: admin
+  web_admin_password: "admin12345"
+
+wireguard:
+  enabled: true
+  address: 10.66.66.1/24
+  listen_port: 51820
+
+confirm: yes

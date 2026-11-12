@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# vlanit-backup — локальный бэкап данных АТС и системы на USB-носитель.
+#
+# vlanit-backup [mountpoint]   (без аргумента — сканирование USB)
+set -Eeuo pipefail
+
+MNT="$1"
+LOG=/var/log/vlanit-backup.log
+exec >> >(tee -a "$LOG") 2>&1
+
+log()  { echo "[$(date '+%H:%M:%S')] $*"; }
+die()  { echo "vlanit-backup: ОШИБКА: $*" >&2; exit 2; }
+[ "$(id -u)" -eq 0 ] || die "требуется root"
+
+# --- 1. целевой носитель ---
+if [ -z "$MNT" ]; then
+    mapfile -t CANDS < <(lsblk -n -o TRAN,MOUNTPOINT | awk '$1=="usb" && $2!=""{print $2}')
+    [ "${#CANDS[@]}" -ge 1 ] || die "USB-носитель не найден (смонтируйте или укажите mountpoint)"
+    if [ "${#CANDS[@]}" -gt 1 ]; then
+        PS3="Выберите носитель: "
+        select MNT in "${CANDS[@]}"; do [ -n "$MNT" ] && break; done
+    else
+        MNT="${CANDS[0]}"
+    fi
+fi
+[ -w "$MNT" ] || die "носитель недоступен для записи: $MNT"
+log "носитель: $MNT"
+
+# --- 2. место и свободное место ---
+TS="$(date +%Y%m%d-%H%M%S)"
+HOST="$(hostname)"
+OUT_TMP="$MNT/.vlanit-backup-$TS.tmp"
+OUT_FINAL="vlanit-backup-$HOST-$TS.tar.zst"
+DATA_MB=$(du -sm /var/spool/mikopbx/cf /var/spool/mikopbx/storage /etc 2>/dev/null | awk '{s+=$1} END{print s+1}')
+FREE_MB=$(df -m --output=avail "$MNT" | tail -1 | tr -d ' ')
+[ "$FREE_MB" -ge "$((DATA_MB + DATA_MB / 10))" ] || \
+    die "на носителе мало места: нужно ~${DATA_MB} МБ, свободно $FREE_MB МБ"
+mkdir -p "$OUT_TMP"
+
+# --- 3. бэкап с гарантированным возвратом контейнера ---
+CONTAINER_RESTARTED=0
+cleanup() {
+    if [ "$CONTAINER_RESTARTED" -eq 0 ]; then
+        log "возврат контейнера в работу"
+        systemctl start mikopbx.service 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
+
+log "остановка MikoPBX"
+stopped=0
+for i in 1 2 3 4 5 6; do
+    if systemctl stop mikopbx.service 2>/dev/null; then stopped=1; break; fi
+    log "повтор остановки ($i)"
+    sleep 10
+done
+[ "$stopped" -eq 1 ] || die "контейнер не остановлен — бэкап прерван"
+log "копирование данных"
+tar -C / --zstd -cpf "$OUT_TMP/data.tar.zst" \
+    var/spool/mikopbx/cf var/spool/mikopbx/storage || die "архивация данных не удалась"
+tar -C / --zstd -cpf "$OUT_TMP/system-etc.tar.zst" etc || die "архивация /etc не удалась"
+sha256sum "$OUT_TMP/data.tar.zst" "$OUT_TMP/system-etc.tar.zst" > "$OUT_TMP/SHA256SUMS"
+cat > "$OUT_TMP/backup-manifest.json" <<EOF
+{
+  "schema_version": 1,
+  "hostname": "$HOST",
+  "created_at": "$(date -Is)",
+  "os_version": "$(. /etc/os-release; echo "$VERSION_ID")",
+  "files": ["data.tar.zst", "system-etc.tar.zst", "SHA256SUMS"]
+}
+EOF
+mv "$OUT_TMP" "$MNT/$OUT_FINAL"
+sync
+log "архив: $MNT/$OUT_FINAL ($(du -h "$MNT/$OUT_FINAL" | cut -f1))"
+
+log "запуск MikoPBX"
+systemctl start mikopbx.service
+CONTAINER_RESTARTED=1
+
+# --- 4. health-check ---
+ready=0
+for i in $(seq 1 60); do
+    podman logs mikopbx 2>/dev/null | grep -q "All services are fully loaded welcome" && { ready=1; break; }
+    sleep 5
+done
+[ "$ready" -eq 1 ] && log "бэкап завершён, MikoPBX работает" \
+                   || { echo "ПРЕДУПРЕЖДЕНИЕ: MikoPBX не стал готов за 5 минут" >&2; exit 1; }
+echo "OK: $MNT/$OUT_FINAL"

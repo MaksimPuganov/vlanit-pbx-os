@@ -1,0 +1,14 @@
+[Unit]
+Description=VLANit OTA test (QEMU, VLANIT_TEST=ota only)
+ConditionKernelCommandLine=VLANIT_TEST=ota
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/vlanit/vlanit-ota-test.sh
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=1200
+
+[Install]
+WantedBy=multi-user.target

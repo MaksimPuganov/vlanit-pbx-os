@@ -1,7 +1,7 @@
 # Основной конфиг сборки VLANit PBX OS
 distro:
   name: VLANit PBX OS
-  version: "1.1.0"
+  version: "1.2.0"
   codename: trixie
   arch: amd64
 
@@ -28,4 +28,4 @@ provisioning:
   schema_version: 1
 
 output:
-  iso_name: VLANit-PBX-1.1-amd64.iso
+  iso_name: VLANit-PBX-1.2-amd64.iso

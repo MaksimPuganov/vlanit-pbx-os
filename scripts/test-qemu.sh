@@ -6,13 +6,15 @@
 #   bash scripts/test-qemu.sh install  — Т2+Т3+Т4+Т6: установка, первая загрузка, MikoPBX, Btrfs
 #   bash scripts/test-qemu.sh offline  — Т5: установка и работа без сети
 #   bash scripts/test-qemu.sh errors   — Т7: ошибочные сценарии
+#   bash scripts/test-qemu.sh ota      — Т8: обновление и откат (vlanit-update/rollback)
+#   bash scripts/test-qemu.sh backup   — Т9: бэкап на USB и восстановление
 #   bash scripts/test-qemu.sh all      — всё вышеперечисленное
 set -Eeuo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-ISO="dist/VLANit-PBX-1.1-amd64.iso"
+ISO="dist/VLANit-PBX-1.2-amd64.iso"
 STAGING="build/iso-staging"
 EFI_IMG="build/grub/efi.img"
 # изолированный каталог на каждый запуск (защита от параллельных/старых прогонов)
@@ -36,6 +38,7 @@ FAILED=0
 say()  { printf '\n=== %s ===\n' "$*"; }
 pass() { printf 'PASS: %s\n' "$*"; }
 fail() { printf 'FAIL: %s\n' "$*"; FAILED=1; }
+die()  { printf 'FATAL: %s\n' "$*" >&2; exit 2; }
 
 # очистка зависших ВМ прошлых прогонов (только наши, по -name vlanit-)
 for pid in $(pgrep -f "qemu-system.*-name vlanit-" 2>/dev/null); do
@@ -50,7 +53,7 @@ make_test_iso() {
     while [ $# -gt 0 ]; do maps+=( "${1%%=*}=${1#*=}" ); shift; done
     # graft-points: iso_path=host_path
     "$XORRISO" -as mkisofs \
-        -V VLANIT_PBX_OS -A "VLANit PBX OS 1.1 test" \
+        -V VLANIT_PBX_OS -A "VLANit PBX OS 1.2 test" \
         -graft-points \
         -o "$out" \
         -e boot/grub/efi.img -no-emul-boot \
@@ -180,10 +183,97 @@ test_install() {
     kill_qemu t2_p2
 }
 
-test_offline() {
-    say "Т5: полностью автономная установка (без сетевых устройств)"
-    install_two_phases t5 none && pass "T5: офлайн-установка и работа MikoPBX"
-    kill_qemu t5_p2
+# USB-образ для Т8/Т9: vfat с пакетом обновления
+make_usb_update() {
+    local out="$1" pkgdir="$2"
+    rm -f "$out"
+    dd if=/dev/zero of="$out" bs=1M count=1024 status=none
+    OUT_ABS="$(realpath "$out")"; PKG_ABS="$(realpath "$pkgdir")"
+    docker run --rm --privileged \
+        -v "$OUT_ABS:/b/usb.raw" -v "$PKG_ABS:/pkg:ro" \
+        vlanit-build:1.0 sh -c "
+        # явная геометрия: mtools не определяет размер bind-mounted файла;
+        # 1024 МБ = 2097152 секторов = 8322 трека при h=4, s=63
+        mformat -i /b/usb.raw -C -t 8322 -h 4 -s 63 -v VLANIT_UPD ::
+        mcopy -i /b/usb.raw /pkg/vlanit-update-*.tar /pkg/vlanit-update-*.tar.asc ::
+    " 2>/dev/null || die "не удалось создать USB-образ"
+}
+
+# Подготовка тестового пакета обновления (тот же образ, новый тег test1)
+build_test_package() {
+    local outdir="$1"
+    mkdir -p "$outdir"
+    cp build/payload/mikopbx-2026.6.99-amd64.tar.zst \
+        "$outdir/mikopbx-2026.6.99-test1-amd64.tar.zst"
+    GNUPGHOME="$HOME/.vlanit-release-gnupg" bash scripts/build-update-package.sh \
+        "$outdir/mikopbx-2026.6.99-test1-amd64.tar.zst" "$outdir" "1.2.0" >/dev/null \
+        || die "не удалось собрать пакет обновления"
+    ls "$outdir"/vlanit-update-*.tar
+}
+
+# Двухфазный сценарий с USB-носителем и тестовым профилем.
+# Носитель готовится в /tmp ПОСЛЕ фазы 1 (каталоги прогонов подвержены
+# внешней чистке). mode=update: пакет из $TESTDIR/${tag}_pkg; mode=blank:
+# чистый vfat.
+run_usb_scenario() {
+    local tag="$1" marker="$2" yaml="$3" mode="${4:-blank}"
+    local p1="${tag}_p1" p2="${tag}_p2"
+    local disk="$TESTDIR/${tag}_disk.qcow2"
+    local usb="/tmp/vlanit-${tag}-usb-$$.raw"
+    local iso="$TESTDIR/${tag}.iso"
+    make_test_iso "$iso" /autoinstall.yaml="$yaml"
+    rm -f "$disk" "$TESTDIR/${p1}_serial.log" "$TESTDIR/${p2}_serial.log"
+    make_disk "$disk"
+    run_qemu "$p1" "$iso" "$disk" \
+        -netdev "user,id=n0" -device virtio-net-pci,netdev=n0
+    if ! wait_serial "$TESTDIR/${p1}_serial.log" "VLANIT_INSTALL_DONE" 1800; then
+        report_failures "$TESTDIR/${p1}_serial.log"
+        fail "$tag: установка не завершена"
+        kill_qemu "$p1"; return 1
+    fi
+    kill_qemu "$p1"
+    if [ "$mode" = "update" ]; then
+        # пакет собираем в /tmp ПОСЛЕ фазы 1
+        local pkgdir="/tmp/vlanit-${tag}-pkg-$$"
+        build_test_package "$pkgdir" >/dev/null
+        make_usb_update "$usb" "$pkgdir"
+        rm -rf "$pkgdir"
+    else
+        rm -f "$usb"
+        dd if=/dev/zero of="$usb" bs=1M count=2048 status=none
+        USB_ABS="$(realpath "$usb")"
+        docker run --rm --privileged -v "$USB_ABS:/b/usb.raw" vlanit-build:1.0 \
+            mformat -i /b/usb.raw -C -t 16644 -h 4 -s 63 -v VLANIT_BAK :: 2>/dev/null \
+            || die "не удалось отформатировать USB ($tag)"
+    fi
+    run_qemu "$p2" "-" "$disk" \
+        -netdev "user,id=n0" -device virtio-net-pci,netdev=n0 \
+        -device qemu-xhci,id=xhci \
+        -drive "file=$usb,if=none,id=usbstick,format=raw" \
+        -device usb-storage,drive=usbstick
+    if wait_serial "$TESTDIR/${p2}_serial.log" "$marker" 2400; then
+        pass "$tag: сценарий завершён ($marker)"
+    elif grep -q "_TEST_FAIL" "$TESTDIR/${p2}_serial.log"; then
+        grep "VLANIT_\(OTA\|BAK\): FAIL" "$TESTDIR/${p2}_serial.log" | sort -u | while read -r l; do fail "$tag: $l"; done
+    else
+        fail "$tag: таймаут сценария (см. $TESTDIR/${p2}_serial.log)"
+    fi
+    rm -f "$usb"
+    return 0
+}
+
+test_ota() {
+    say "Т8: обновление (vlanit-update) и откат (vlanit-rollback)"
+    run_usb_scenario t8 "VLANIT_OTA: OTA_TEST_PASS" tests/integration/autoinstall-ota.yaml update \
+        && pass "Т8: негатив (битый пакет), обновление, снапшот, откат, возврат версии"
+    kill_qemu t8_p2
+}
+
+test_backup() {
+    say "Т9: бэкап на USB (vlanit-backup) и восстановление"
+    run_usb_scenario t9 "VLANIT_BAK: BACKUP_TEST_PASS" tests/integration/autoinstall-backup.yaml blank \
+        && pass "Т9: бэкап, модификация, восстановление, сохранение после reboot"
+    kill_qemu t9_p2
 }
 
 test_errors() {
@@ -240,12 +330,20 @@ test_errors() {
     kill_qemu "$name"
 }
 
+test_offline() {
+    say "Т5: полностью автономная установка (без сетевых устройств)"
+    install_two_phases t5 none && pass "T5: офлайн-установка и работа MikoPBX"
+    kill_qemu t5_p2
+}
+
 case "${1:-all}" in
     boot)    test_boot ;;
     install) test_install ;;
     offline) test_offline ;;
     errors)  test_errors ;;
-    all)     test_boot; test_install; test_offline; test_errors ;;
+    ota)     test_ota ;;
+    backup)  test_backup ;;
+    all)     test_boot; test_install; test_offline; test_errors; test_ota; test_backup ;;
     *) echo "Неизвестный сценарий: $1"; exit 2 ;;
 esac
 

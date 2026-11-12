@@ -49,4 +49,16 @@ fi
 
 mkdir -p /var/lib/vlanit
 date -Is > /var/lib/vlanit/firstboot-done
+
+# контроль стандартного пароля веб-админа MikoPBX
+if ! grep -q "WEB_ADMIN_PASSWORD=" /etc/containers/systemd/mikopbx.container; then
+    log "проверка стандартного пароля веб-админа MikoPBX"
+    sleep 20   # дать контейнеру поднять веб
+    if curl -sk --max-time 10 -X POST https://127.0.0.1/pbxcore/api/v3/auth:login \
+            -H 'Content-Type: application/json' \
+            -d '{"login":"admin","password":"admin"}' 2>/dev/null | grep -q accessToken; then
+        log "ВНИМАНИЕ: веб-админ MikoPBX использует стандартный пароль admin/admin — смените: https://<IP-адрес>"
+        echo "VLANit: веб-админ MikoPBX использует стандартный пароль — смените через веб-интерфейс." >> /etc/motd
+    fi
+fi
 log "первичная настройка завершена"

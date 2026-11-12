@@ -2,4 +2,8 @@
 /dist/
 /tools/root/
 /tools/debs/
+/tools/podman-root/
+/tools/podman-etc/
+/tools/podman-debs/
 *.log
+# приватный ключ релиза хранится ВНЕ репозитория (~/.vlanit-release-gnupg)

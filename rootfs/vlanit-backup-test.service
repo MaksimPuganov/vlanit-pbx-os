@@ -1,0 +1,14 @@
+[Unit]
+Description=VLANit backup test (QEMU, VLANIT_TEST=backup only)
+ConditionKernelCommandLine=VLANIT_TEST=backup
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/vlanit/vlanit-backup-test.sh
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=1200
+
+[Install]
+WantedBy=multi-user.target

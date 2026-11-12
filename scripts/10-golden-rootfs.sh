@@ -27,6 +27,7 @@ iproute2 iputils-ping ethtool pciutils usbutils smartmontools nvme-cli dmidecode
 iptables nftables
 wireguard-tools
 logrotate
+unattended-upgrades fail2ban
 "
 
 log "mmdebstrap: Debian 13 (trixie) minimal rootfs"
@@ -61,6 +62,26 @@ install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-issue" \
 install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-motd" \
     "$ROOTFS/etc/motd"
 
+# OTA: команды обновления/отката, ключ релиза, конфиг канала
+install -D -m 0755 "$PROJECT_ROOT/snapshots/vlanit-update" \
+    "$ROOTFS/usr/local/sbin/vlanit-update"
+install -D -m 0755 "$PROJECT_ROOT/snapshots/vlanit-rollback" \
+    "$ROOTFS/usr/local/sbin/vlanit-rollback"
+install -D -m 0755 "$PROJECT_ROOT/snapshots/vlanit-backup" \
+    "$ROOTFS/usr/local/sbin/vlanit-backup"
+install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-vlanit-release.pub" \
+    "$ROOTFS/etc/vlanit/release.pub"
+install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-vlanit-update.conf" \
+    "$ROOTFS/etc/vlanit/update.conf"
+
+# безопасность: автообновления, sshd, fail2ban
+install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-apt-20vlanit-auto-upgrades" \
+    "$ROOTFS/etc/apt/apt.conf.d/20vlanit-auto-upgrades"
+install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-ssh-01-vlanit.conf" \
+    "$ROOTFS/etc/ssh/sshd_config.d/01-vlanit.conf"
+install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-fail2ban-vlanit-sshd.conf" \
+    "$ROOTFS/etc/fail2ban/jail.d/vlanit-sshd.conf"
+
 # first-boot служба
 install -D -m 0644 "$PROJECT_ROOT/rootfs/vlanit-firstboot.service" \
     "$ROOTFS/etc/systemd/system/vlanit-firstboot.service"
@@ -72,9 +93,19 @@ install -D -m 0755 "$PROJECT_ROOT/rootfs/vlanit-test-agent.sh" \
     "$ROOTFS/opt/vlanit/vlanit-test-agent.sh"
 install -D -m 0644 "$PROJECT_ROOT/rootfs/vlanit-test-agent.service" \
     "$ROOTFS/etc/systemd/system/vlanit-test-agent.service"
+install -D -m 0755 "$PROJECT_ROOT/rootfs/vlanit-ota-test.sh" \
+    "$ROOTFS/opt/vlanit/vlanit-ota-test.sh"
+install -D -m 0644 "$PROJECT_ROOT/rootfs/vlanit-ota-test.service" \
+    "$ROOTFS/etc/systemd/system/vlanit-ota-test.service"
+install -D -m 0755 "$PROJECT_ROOT/rootfs/vlanit-backup-test.sh" \
+    "$ROOTFS/opt/vlanit/vlanit-backup-test.sh"
+install -D -m 0644 "$PROJECT_ROOT/rootfs/vlanit-backup-test.service" \
+    "$ROOTFS/etc/systemd/system/vlanit-backup-test.service"
 # preset-файл попадает в rootfs уже после установки пакетов — включаем службы явно
 for unit in vlanit-firstboot.service vlanit-test-agent.service \
-            systemd-networkd.service systemd-resolved.service ssh.service; do
+            vlanit-ota-test.service vlanit-backup-test.service \
+            systemd-networkd.service systemd-resolved.service \
+            ssh.service fail2ban.service; do
     chroot "$ROOTFS" systemctl enable "$unit" 2>/dev/null || \
         echo "WARN: не удалось включить $unit"
 done

@@ -1,6 +1,6 @@
 [Unit]
 Description=VLANit test agent (QEMU only)
-ConditionKernelCommandLine=VLANIT_TEST
+ConditionKernelCommandLine=VLANIT_TEST=1
 After=multi-user.target
 Wants=mikopbx.service
 
