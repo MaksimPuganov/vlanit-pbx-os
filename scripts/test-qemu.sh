@@ -14,7 +14,7 @@ set -Eeuo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-ISO="dist/VLANit-PBX-1.2-amd64.iso"
+ISO="dist/VLANit-PBX-1.2.1-amd64.iso"
 STAGING="build/iso-staging"
 EFI_IMG="build/grub/efi.img"
 # изолированный каталог на каждый запуск (защита от параллельных/старых прогонов)
@@ -53,7 +53,7 @@ make_test_iso() {
     while [ $# -gt 0 ]; do maps+=( "${1%%=*}=${1#*=}" ); shift; done
     # graft-points: iso_path=host_path
     "$XORRISO" -as mkisofs \
-        -V VLANIT_PBX_OS -A "VLANit PBX OS 1.2 test" \
+        -V VLANIT_PBX_OS -A "VLANit PBX OS 1.2.1 test" \
         -graft-points \
         -o "$out" \
         -e boot/grub/efi.img -no-emul-boot \
@@ -282,10 +282,10 @@ run_usb_scenario() {
         rm -rf "$pkgdir"
     else
         rm -f "$usb"
-        dd if=/dev/zero of="$usb" bs=1M count=2048 status=none
+        dd if=/dev/zero of="$usb" bs=1M count=3072 status=none
         USB_ABS="$(realpath "$usb")"
         docker run --rm --privileged -v "$USB_ABS:/b/usb.raw" vlanit-build:1.0 \
-            mformat -i /b/usb.raw -C -t 16644 -h 4 -s 63 -v VLANIT_BAK :: 2>/dev/null \
+            mformat -i /b/usb.raw -C -t 24966 -h 4 -s 63 -v VLANIT_BAK :: 2>/dev/null \
             || die "не удалось отформатировать USB ($tag)"
     fi
     run_qemu "$p2" "-" "$disk" \

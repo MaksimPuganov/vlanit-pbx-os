@@ -29,7 +29,7 @@ case "$PHASE" in
             ok "backup-created"
         else
             bad "backup-created"
-            head -10 /tmp/vlanit-bak.log | while read -r l; do out "  $l"; done
+            cat /tmp/vlanit-bak.log | while read -r l; do out "  $l"; done
         fi
         ls -d "$USB_MNT"/vlanit-backup-*/data.tar.zst >/dev/null 2>&1 && ok "backup-files" || bad "backup-files"
         systemctl is-active --quiet mikopbx.service && ok "mikopbx-active-after-backup" \
