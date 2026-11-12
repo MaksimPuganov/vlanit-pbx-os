@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         grub-efi-amd64-bin \
         grub-pc-bin \
         grub-common \
+        python3-cairosvg \
+        python3-pil \
+        fonts-dejavu-core \
         mtools \
         zstd \
         cpio \

@@ -13,8 +13,20 @@ mkdir -p "$STAGING/boot/grub" "$GRUB_DIR" "$DIST_DIR"
 
 log() { printf '[iso] %s\n' "$*"; }
 
+# --- фирменные ассеты генерируются при сборке (в git не хранятся) ---
+BRAND_OUT="$BUILD_DIR/branding-out"
+mkdir -p "$BRAND_OUT"
+log_brand() { printf '[brand] %s\n' "$*"; }
+log_brand "фон GRUB (генерация из SVG-логотипа)"
+python3 "$PROJECT_ROOT/branding/make-grub-bg.py" \
+    "$PROJECT_ROOT/branding/vlanit-logo-on-dark.svg" \
+    "$BRAND_OUT/vlanit-grub-bg.png"
+log_brand "unicode.pf2 (DejaVu Sans Mono, U+20–U+2FFF)"
+grub-mkfont -o "$BRAND_OUT/unicode.pf2" -s 32 -r 0x20-0x2FFF \
+    /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf
+
 # --- grub.cfg на ISO (фирменная тема VLANit: палитра с vlanit.com) ---
-cp "$PROJECT_ROOT/branding/vlanit-grub-bg.png" "$STAGING/boot/grub/vlanit-grub-bg.png"
+cp "$BRAND_OUT/vlanit-grub-bg.png" "$STAGING/boot/grub/vlanit-grub-bg.png"
 cat > "$STAGING/boot/grub/grub.cfg" <<'EOF'
 set timeout=5
 set default=0
@@ -74,10 +86,9 @@ mmd -i "$GRUB_DIR/efi.img" ::/boot/grub
 mcopy -i "$GRUB_DIR/efi.img" "$GRUB_DIR/grub.cfg" ::/boot/grub/grub.cfg
 # фон, тема и шрифт — и в ESP-раздел (загрузка с флешки), и в ISO9660
 # фирменный фон и шрифт — и в ESP-раздел (загрузка с флешки), и в ISO9660
-cp "$PROJECT_ROOT/branding/unicode.pf2" "$STAGING/boot/grub/unicode.pf2"
-mcopy -i "$GRUB_DIR/efi.img" "$PROJECT_ROOT/branding/unicode.pf2" ::/boot/grub/unicode.pf2
-mcopy -i "$GRUB_DIR/efi.img" "$PROJECT_ROOT/branding/vlanit-grub-bg.png" ::/boot/grub/vlanit-grub-bg.png
-cp "$PROJECT_ROOT/branding/vlanit-grub-bg.png" "$STAGING/boot/grub/vlanit-grub-bg.png"
+cp "$BRAND_OUT/unicode.pf2" "$STAGING/boot/grub/unicode.pf2"
+mcopy -i "$GRUB_DIR/efi.img" "$BRAND_OUT/unicode.pf2" ::/boot/grub/unicode.pf2
+mcopy -i "$GRUB_DIR/efi.img" "$BRAND_OUT/vlanit-grub-bg.png" ::/boot/grub/vlanit-grub-bg.png
 cp "$GRUB_DIR/efi.img" "$STAGING/boot/grub/efi.img"
 
 # --- ISO ---
