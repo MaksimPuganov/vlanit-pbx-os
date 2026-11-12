@@ -64,6 +64,30 @@ make_test_iso() {
 
 make_disk() { qemu-img create -f qcow2 "$1" "${DISK_SIZE_GB}G" >/dev/null; }
 
+# Скриншот экрана ВМ через monitor (screendump PPM -> PNG).
+# shot <имя> <vm-name>
+shot() {
+    local name="$1" vm="$2"
+    local mon="$TESTDIR/${vm}.monitor"
+    local dir
+    dir="$(mkdir -p "$TESTDIR/${vm}_shots" && realpath "$TESTDIR/${vm}_shots")"
+    [ -S "$mon" ] || return 0
+    MON_ABS="$(realpath "$mon")"
+    printf 'screendump %s/%s.ppm\n' "$dir" "$name" | \
+        python3 -c 'import socket,sys,time; s=socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); s.sendall(sys.stdin.buffer.read()); time.sleep(0.5)' "$MON_ABS" 2>/dev/null || return 0
+    sleep 2
+    [ -f "$dir/$name.ppm" ] && python3 "$PROJECT_ROOT/scripts/ppm2png.py" \
+        "$dir/$name.ppm" "$dir/$name.png" >/dev/null 2>&1 && rm -f "$dir/$name.ppm"
+}
+
+# Чистка старых прогонов: оставляем KEEP_RUNS последних каталогов
+cleanup_runs() {
+    local keep="${KEEP_RUNS:-3}"
+    ls -1dt "$PROJECT_ROOT"/build/qemu/2* 2>/dev/null | tail -n +$((keep + 1)) | \
+        while read -r d; do echo "cleanup: $d"; rm -rf "$d"; done
+    rm -f /tmp/vlanit-*-usb-*.raw /tmp/vlanit-*-pkg-*
+}
+
 run_qemu() {
     # run_qemu <name> <iso|-> <disk|-> [extra args...]
     local name="$1" iso="$2" disk="$3"; shift 3
@@ -77,6 +101,7 @@ run_qemu() {
         -drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE"
         -drive "if=pflash,format=raw,file=$vars"
         -serial "file:$TESTDIR/${name}_serial.log"
+        -monitor "unix:$TESTDIR/${name}.monitor,server,nowait"
         -display none -pidfile "$TESTDIR/${name}.pid" -daemonize
     )
     [ "$iso" != "-" ]  && args+=( -cdrom "$iso" )
@@ -117,7 +142,9 @@ test_boot() {
     make_test_iso "$TESTDIR/t1.iso" /autoinstall.yaml=tests/integration/autoinstall.yaml
     rm -f "$TESTDIR/${name}_serial.log"
     run_qemu "$name" "$TESTDIR/t1.iso" "-"
+    sleep 7; shot "00-grub-menu" "$name"   # меню загрузки GRUB
     if wait_serial "$TESTDIR/${name}_serial.log" "обнаружен autoinstall" 300; then
+        sleep 10; shot "01-installer-running" "$name"
         pass "T1: UEFI-загрузка live-среды и запуск VLANit Installer"
     else
         fail "T1: установщик не запустился (см. $TESTDIR/${name}_serial.log)"
@@ -142,12 +169,15 @@ install_two_phases() {
         netargs1=( -netdev "user,id=n0" -device virtio-net-pci,netdev=n0 )
     fi
     run_qemu "$p1" "$iso" "$disk" "${netargs1[@]}"
+    sleep 35; shot "01-install-progress" "$p1"   # этап разметки/развёртывания
     if ! wait_serial "$TESTDIR/${p1}_serial.log" "VLANIT_INSTALL_DONE" 1800; then
         report_failures "$TESTDIR/${p1}_serial.log"
+        shot "01-install-failed" "$p1"
         fail "$tag: установка не завершена (фаза 1)"
         kill_qemu "$p1"
         return 1
     fi
+    shot "02-install-finished" "$p1"
     grep -q "VLANIT_EFI" "$TESTDIR/${p1}_serial.log" \
         && pass "$tag: GPT-разметка выполнена" || fail "$tag: нет подтверждения разметки"
     kill_qemu "$p1"
@@ -159,6 +189,7 @@ install_two_phases() {
     fi
     run_qemu "$p2" "-" "$disk" "${netargs2[@]}"
     if wait_serial "$TESTDIR/${p2}_serial.log" "VLANIT_TEST_PASS" 1800; then
+        sleep 5; shot "03-installed-system" "$p2"   # консоль установленной системы
         pass "$tag: первая загрузка с диска, все проверки агента пройдены"
     elif wait_serial "$TESTDIR/${p2}_serial.log" "VLANIT_TEST_FAIL" 1800; then
         report_failures "$TESTDIR/${p2}_serial.log"
@@ -336,6 +367,8 @@ test_offline() {
     kill_qemu t5_p2
 }
 
+cleanup_runs
+
 case "${1:-all}" in
     boot)    test_boot ;;
     install) test_install ;;
@@ -348,4 +381,5 @@ case "${1:-all}" in
 esac
 
 say "ИТОГ"
+cleanup_runs
 if [ "$FAILED" -eq 0 ]; then echo "ВСЕ ЗАПУЩЕННЫЕ ТЕСТЫ ПРОЙДЕНЫ"; else echo "ЕСТЬ ПРОВАЛЕННЫЕ ТЕСТЫ"; exit 1; fi

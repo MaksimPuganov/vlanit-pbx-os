@@ -21,6 +21,12 @@ clean:
 	rm -rf build/rootfs build/live build/iso-staging build/initramfs
 	rm -f build/*.log dist/*.iso dist/*.sha256
 
+# чистка тестовых прогонов (оставляет 3 последних; KEEP_RUNS=N для Override)
+clean-tests:
+	@ls -1dt build/qemu/2* 2>/dev/null | tail -n +4 | xargs -r rm -rf
+	@rm -f /tmp/vlanit-*-usb-*.raw /tmp/vlanit-*-pkg-*
+	@echo "тестовые прогоны очищены"
+
 help:
 	@echo "VLANit PBX OS build system"
 	@echo ""

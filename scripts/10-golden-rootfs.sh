@@ -40,6 +40,13 @@ mmdebstrap \
     --include="$GOLDEN_PACKAGES" \
     trixie "$ROOTFS" http://deb.debian.org/debian
 
+# все пакеты — последних версий (security/updates на момент сборки)
+log "apt full-upgrade"
+chroot "$ROOTFS" sh -c '
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get -y -qq full-upgrade
+'
+
 # --- установка VLANit-компонентов в rootfs ---
 log "копирование VLANit provisioning / quadlet / snapshots"
 install -d -m 0755 "$ROOTFS/opt/vlanit"

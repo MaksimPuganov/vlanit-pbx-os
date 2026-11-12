@@ -37,6 +37,12 @@ mmdebstrap \
     --include="$LIVE_PACKAGES" \
     trixie "$ROOTFS" http://deb.debian.org/debian
 
+log "apt full-upgrade"
+chroot "$ROOTFS" sh -c '
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get -y -qq full-upgrade
+'
+
 log "локали (en_US.UTF-8, ru_RU.UTF-8)"
 chroot "$ROOTFS" sh -c '
     sed -i -e "s/^# *en_US.UTF-8/en_US.UTF-8/" -e "s/^# *ru_RU.UTF-8/ru_RU.UTF-8/" /etc/locale.gen
