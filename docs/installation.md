@@ -1,13 +1,68 @@
 # Установка VLANit PBX OS
 
-## 1. Запись ISO на USB
+## 1. Создание загрузочной флэшки
+
+Ниже — несколько способов записать ISO на USB-накопитель (8+ ГБ).
+Все способы равнозначны; выберите удобный. **Внимание: все данные
+на флэшке будут удалены.**
+
+### Способ 1. Linux: скрипт write-usb.sh (рекомендуемый)
+
+Самый безопасный способ: скрипт показывает модель и размер диска,
+проверяет смонтированные разделы и требует явного подтверждения.
 
 ```bash
 sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.0-amd64.iso /dev/sdX
 ```
 
-(замените `/dev/sdX` на ваш накопитель; скрипт показывает модель/размер
-и требует ввода «ДА». Данные на накопителе будут удалены.)
+(`/dev/sdX` — ваша флэшка, например `/dev/sdb`; точное имя смотрите
+в выводе `lsblk -o NAME,SIZE,MODEL,TRAN`.)
+
+Эквивалент вручную:
+
+```bash
+sudo dd if=VLANit-PBX-1.0-amd64.iso of=/dev/sdX bs=4M status=progress oflag=sync
+sync
+```
+
+### Способ 2. Linux: графические утилиты (без терминала)
+
+- **GNOME Disks (Диски)** — Ubuntu/Fedora/Debian с GNOME:
+  выбрать флэшку → меню ⋮ → «Восстановить образ диска» → выбрать ISO.
+- **KDE ISO Image Writer** — в KDE: «Запись образа» → выбрать ISO и флэшку.
+- **balenaEtcher** — кроссплатформенная (Linux/Windows/macOS):
+  скачать с https://etcher.balena.io → «Flash from file» → выбрать ISO и
+  накопитель → Flash.
+
+### Способ 3. Windows: Rufus или balenaEtcher
+
+- **Rufus** (https://rufus.ie): выбрать ISO → в диалоге режима записи
+  выбрать **«DD-образ»** (важно: не «ISO-образ») → «Старт».
+- **balenaEtcher**: как в способе 2.
+
+### Способ 4. macOS: dd или balenaEtcher
+
+```bash
+# узнать идентификатор флэшки, например disk4
+diskutil list
+diskutil unmountDisk /dev/disk4
+sudo dd if=VLANit-PBX-1.0-amd64.iso of=/dev/rdisk4 bs=4m
+diskutil eject /dev/disk4
+```
+
+### Способ 5 (опционально). Ventoy
+
+Если флэшка уже подготовлена [Ventoy](https://ventoy.net), достаточно
+скопировать ISO обычным копированием в корень флэшки. Загрузка
+выполняется через меню Ventoy (выбрать ISO → UEFI).
+
+### Проверка записи
+
+```bash
+sha256sum -c dist/VLANit-PBX-1.0-amd64.iso.sha256   # сверить образ до записи
+# после записи — сравнить первые блоки (Linux):
+sudo head -c 1G /dev/sdX | sha256sum   # должно совпасть с началом образа
+```
 
 ## 2. Загрузка устройства
 

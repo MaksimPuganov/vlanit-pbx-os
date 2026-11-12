@@ -31,6 +31,8 @@ bash scripts/test-qemu.sh install    # только установка/загр�
 
 # запись на USB (требует root, ДЕСТРУКТИВНО)
 sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.0-amd64.iso /dev/sdX
+# другие способы (dd, GNOME Disks, KDE ISO Image Writer, Rufus, balenaEtcher,
+# macOS dd, Ventoy) — docs/installation.md, раздел «Создание загрузочной флэшки»
 
 make clean          # очистка build/{rootfs,live,iso-staging}, dist
 ```
