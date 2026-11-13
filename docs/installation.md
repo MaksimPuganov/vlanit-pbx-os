@@ -12,7 +12,7 @@
 проверяет смонтированные разделы и требует явного подтверждения.
 
 ```bash
-sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.2.3-amd64.iso /dev/sdX
+sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.2.4-amd64.iso /dev/sdX
 ```
 
 (`/dev/sdX` — ваша флэшка, например `/dev/sdb`; точное имя смотрите
@@ -59,7 +59,7 @@ diskutil eject /dev/disk4
 ### Проверка записи
 
 ```bash
-sha256sum -c dist/VLANit-PBX-1.2.3-amd64.iso.sha256   # сверить образ до записи
+sha256sum -c dist/VLANit-PBX-1.2.4-amd64.iso.sha256   # сверить образ до записи
 # после записи — сравнить первые блоки (Linux):
 sudo head -c 1G /dev/sdX | sha256sum   # должно совпасть с началом образа
 ```

@@ -33,6 +33,12 @@ MikoPBX (REBOOT_TEST_PASS).
 
 ## Фактические результаты
 
+### Прогон 2026-11-13, ISO VLANit-PBX-1.2.4-amd64.iso (system hardening)
+
+| Тест | Результат |
+|---|---|
+| Т1–Т9 полный прогон | PASS (агент: 33 проверки: вход в систему, SSH host keys, nftables, persistent journal, pids 4096, power key) |
+
 ### Прогон 2026-11-13, ISO VLANit-PBX-1.2.3-amd64.iso (field fixes)
 
 | Тест | Результат |

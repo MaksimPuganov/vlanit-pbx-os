@@ -18,10 +18,12 @@ Environment=ID_WWW_USER=1001
 Environment=ID_WWW_GROUP=1001
 Environment=SSH_PORT=23
 
+PidsLimit=4096
+
 [Service]
 Restart=always
 TimeoutStartSec=300
-TimeoutStopSec=90
+TimeoutStopSec=120
 
 [Install]
 WantedBy=multi-user.target

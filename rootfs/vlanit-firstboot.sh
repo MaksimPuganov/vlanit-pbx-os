@@ -13,6 +13,18 @@ if [ ! -s /etc/machine-id ]; then
     systemd-machine-id-setup || log "WARN: machine-id setup failed"
 fi
 
+# SSH host keys: sshd-keygen.service не срабатывает (ConditionFirstBoot
+# перекрыт нашим firstboot) — генерируем сами, идемпотентно.
+# ssh.service к этому моменту уже мог стартовать и упасть без ключей —
+# после генерации перезапускаем.
+if ! ls /etc/ssh/ssh_host_* >/dev/null 2>&1; then
+    ssh-keygen -A || log "WARN: генерация SSH host keys не удалась"
+    # ssh.service упал на старте без ключей и ушёл в rate limit:
+    # сбрасываем состояние, затем безусловный restart
+    systemctl reset-failed ssh.service 2>/dev/null || true
+    systemctl restart ssh.service 2>/dev/null || systemctl start ssh.service || true
+fi
+
 # пользователь владения данными MikoPBX
 if ! id vlanit-www >/dev/null 2>&1; then
     useradd --system --uid 1001 --user-group --home-dir /var/spool/mikopbx \

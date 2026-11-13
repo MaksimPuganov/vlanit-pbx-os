@@ -97,6 +97,18 @@ check "timesyncd" sh -c "systemctl is-active --quiet systemd-timesyncd"
 check "quadlet-perms-600" sh -c "stat -c %a /etc/containers/systemd/mikopbx.container | grep -q 600"
 check "atc-ssh-port-23" sh -c "podman exec mikopbx sh -c 'test \"\$SSH_PORT\" = 23'"
 
+# --- 1.2.4: системная интеграция и харденинг ---
+check "bin-login-present" sh -c "test -x /usr/bin/login"
+check "ssh-host-keys" sh -c '
+  ls /etc/ssh/ssh_host_* >/dev/null 2>&1 || { echo "== /etc/ssh:"; ls -la /etc/ssh/; }
+  systemctl is-active --quiet ssh || { echo "== ssh status:"; systemctl status ssh --no-pager 2>&1 | tail -8; }
+  ls /etc/ssh/ssh_host_* >/dev/null 2>&1 && systemctl is-active --quiet ssh
+'
+check "nft-policy-drop" sh -c "nft list ruleset 2>/dev/null | grep -q 'policy drop'"
+check "pids-limit" sh -c "podman inspect mikopbx --format '{{.HostConfig.PidsLimit}}' 2>/dev/null | grep -q 4096"
+check "handle-power-key" sh -c "busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandlePowerKey 2>/dev/null | grep -q ignore"
+# journal-persistent проверяется после reboot-фазы (см. ниже)
+
 # --- перезагрузка и проверка сохранения (Т4: автозапуск после reboot) ---
 if [ "$fail" -eq 0 ] && [ ! -f /var/spool/mikopbx/storage/.vlanit-reboot-marker ]; then
     date -Is > /var/spool/mikopbx/storage/.vlanit-reboot-marker
@@ -109,6 +121,8 @@ fi
 if [ -f /var/spool/mikopbx/storage/.vlanit-reboot-marker ]; then
     check "reboot-data-persisted" sh -c "test -s /var/spool/mikopbx/storage/.vlanit-reboot-marker"
     check "reboot-mikopbx-active" systemctl is-active --quiet mikopbx.service
+    # журналы прошлой загрузки доступны (Storage=persistent)
+    check "journal-persistent" sh -c "[ \"\$(journalctl -b -1 -n 1 2>/dev/null | wc -l)\" -gt 0 ]"
     out "REBOOT_TEST_PASS"
 fi
 

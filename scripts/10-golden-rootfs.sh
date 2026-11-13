@@ -19,7 +19,7 @@ linux-image-amd64 initramfs-tools busybox-static
 grub-efi-amd64 grub-pc-bin grub-common
 podman crun golang-github-containers-common systemd-resolved
 btrfs-progs dosfstools e2fsprogs
-openssh-server sudo
+openssh-server sudo login
 curl ca-certificates jq zstd
 python3 python3-minimal python3-yaml
 tzdata kbd
@@ -134,6 +134,20 @@ cat > "$ROOTFS/etc/systemd/timesyncd.conf" <<'EOF'
 FallbackNTP=0.deb.pool.ntp.org 1.deb.pool.ntp.org 2.deb.pool.ntp.org
 EOF
 
+# firewall default-deny (ADR-0003) и поведение кнопки питания
+install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-nftables.conf" \
+    "$ROOTFS/etc/nftables.conf"
+install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-logind-01-vlanit.conf" \
+    "$ROOTFS/etc/systemd/logind.conf.d/01-vlanit.conf"
+
+# персистентные журналы (без /var/log/journal journald пишет в tmpfs)
+mkdir -p "$ROOTFS/var/log/journal" "$ROOTFS/etc/systemd/journald.conf.d"
+cat > "$ROOTFS/etc/systemd/journald.conf.d/01-vlanit.conf" <<'EOF'
+[Journal]
+Storage=persistent
+SystemMaxUse=200M
+EOF
+
 # first-boot служба
 install -D -m 0644 "$PROJECT_ROOT/rootfs/vlanit-firstboot.service" \
     "$ROOTFS/etc/systemd/system/vlanit-firstboot.service"
@@ -157,7 +171,7 @@ install -D -m 0644 "$PROJECT_ROOT/rootfs/vlanit-backup-test.service" \
 for unit in vlanit-firstboot.service vlanit-test-agent.service \
             vlanit-ota-test.service vlanit-backup-test.service \
             systemd-networkd.service systemd-resolved.service \
-            systemd-timesyncd.service \
+            systemd-timesyncd.service nftables.service \
             ssh.service fail2ban.service; do
     chroot "$ROOTFS" systemctl enable "$unit" 2>/dev/null || \
         echo "WARN: не удалось включить $unit"

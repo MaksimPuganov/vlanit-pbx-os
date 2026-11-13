@@ -55,7 +55,7 @@ bash scripts/test-qemu.sh all        # все сценарии
 bash scripts/test-qemu.sh install    # только установка/загрузка/MikoPBX
 
 # запись на USB (требует root, ДЕСТРУКТИВНО)
-sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.2.3-amd64.iso /dev/sdX
+sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.2.4-amd64.iso /dev/sdX
 # другие способы (dd, GNOME Disks, KDE ISO Image Writer, Rufus, balenaEtcher,
 # macOS dd, Ventoy) — docs/installation.md, раздел «Создание загрузочной флэшки»
 
@@ -66,8 +66,8 @@ make clean          # очистка build/{rootfs,live,iso-staging}, dist
 
 | Путь | Назначение |
 |---|---|
-| `dist/VLANit-PBX-1.2.3-amd64.iso` | итоговый загрузочный ISO (UEFI) |
-| `dist/VLANit-PBX-1.2.3-amd64.iso.sha256` | контрольная сумма |
+| `dist/VLANit-PBX-1.2.4-amd64.iso` | итоговый загрузочный ISO (UEFI) |
+| `dist/VLANit-PBX-1.2.4-amd64.iso.sha256` | контрольная сумма |
 | `build/payload/mikopbx-*.tar.zst` | экспортированный образ MikoPBX (+sha256) |
 | `build/payload/golden.tar.zst` | Golden Image устанавливаемой системы |
 | `build/logs/` | журналы шагов сборки |
