@@ -1,0 +1,46 @@
+# Сборка ISO VLANit PBX OS (запуск вручную — workflow_dispatch).
+name: build-iso
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Опубликовать релиз v<version> после сборки"
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # GITHUB_TOKEN в этом репозитории по умолчанию только на чтение;
+    # запись нужна шагу публикации релиза.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Payload MikoPBX (pull + verify digest)
+        run: bash scripts/pull-mikopbx.sh
+
+      - name: Сборка ISO
+        run: make iso
+
+      - name: Артефакт ISO
+        if: ${{ !inputs.release }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vlanit-pbx-iso
+          path: |
+            dist/*.iso
+            dist/*.iso.sha256
+          retention-days: 14
+
+      - name: Публикация релиза
+        if: ${{ inputs.release }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VER=$(grep -oP 'version:\s*"\K[0-9.]+' config/build.yaml | head -1)
+          gh release create "v${VER}" dist/*.iso dist/*.iso.sha256 \
+            --title "VLANit PBX OS ${VER}" \
+            --generate-notes
