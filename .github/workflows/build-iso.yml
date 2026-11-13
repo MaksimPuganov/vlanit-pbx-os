@@ -39,7 +39,10 @@ jobs:
       - name: Подпись контрольных сумм (GPG)
         env:
           RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
-        run: bash scripts/sign-release.sh
+        # dist/* созданы build-контейнером от root — отдать раннеру для подписи
+        run: |
+          sudo chown -R "$USER":"$USER" dist
+          bash scripts/sign-release.sh
 
       - name: Артефакт ISO
         if: ${{ github.event_name == 'workflow_dispatch' && !inputs.release }}
