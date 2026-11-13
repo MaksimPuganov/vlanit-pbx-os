@@ -94,8 +94,11 @@ check "plymouth-theme-vlanit" grep -q "Theme=vlanit" /etc/plymouth/plymouthd.con
 # --- 1.2.3: реестр проверок по фидбеку полевых тестов ---
 check "apt-security-source" sh -c "grep -rh trixie-security /etc/apt/sources.list /etc/apt/sources.list.d/ | grep -q ."
 check "timesyncd" sh -c "systemctl is-active --quiet systemd-timesyncd"
+check "timezone-set" sh -c "test -s /etc/timezone"
+check "console-font-cyrillic" grep -q "^FONT=CyrSlav" /etc/vconsole.conf
 check "quadlet-perms-600" sh -c "stat -c %a /etc/containers/systemd/mikopbx.container | grep -q 600"
 check "atc-ssh-port-23" sh -c "podman exec mikopbx sh -c 'test \"\$SSH_PORT\" = 23'"
+check "atc-password-nonempty" sh -c "grep -q 'WEB_ADMIN_PASSWORD=..' /etc/containers/systemd/mikopbx.container"
 
 # --- 1.2.4: системная интеграция и харденинг ---
 check "bin-login-present" sh -c "test -x /usr/bin/login"
