@@ -126,6 +126,13 @@ make iso            # == bash scripts/build.sh в build-контейнере
 bash scripts/test-qemu.sh all        # все сценарии
 bash scripts/test-qemu.sh install    # только установка/загрузка/MikoPBX
 
+# подпись контрольных сумм релиза (GPG, ключ релиза)
+bash scripts/sign-release.sh   # dist/*.iso.sha256 -> .asc
+
+# релиз через CI: git tag vX.Y.Z && git push origin vX.Y.Z
+# workflow build-iso собирает ISO из исходников тега и публикует релиз
+# с подписанными контрольными суммами (идея #11, см. ниже «Правило релизов»)
+
 # запись на USB (требует root, ДЕСТРУКТИВНО)
 sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.2.6-amd64.iso /dev/sdX
 # другие способы (dd, GNOME Disks, KDE ISO Image Writer, Rufus, balenaEtcher,
@@ -158,3 +165,19 @@ make clean          # очистка build/{rootfs,live,iso-staging}, dist
 - Установщик и его автономный режим описаны в `docs/installation.md`.
 - Исследование MikoPBX: `docs/mikopbx-research.md`.
 - Результаты тестов: `docs/testing.md`.
+
+## Правило релизов (CI)
+
+1. Тег и файлы релиза после публикации не меняются.
+2. Каждый релиз собирает CI из запушенных исходников: `git tag vX.Y.Z &&
+   git push origin vX.Y.Z` запускает workflow `build-iso`, который публикует
+   релиз с этим тегом (`--verify-tag`). Ручной запуск — `workflow_dispatch`.
+3. Контрольные суммы ISO подписаны GPG-ключом релиза (публичный ключ —
+   `rootfs/etc-vlanit-release.pub`, приватный — GitHub Secret
+   `RELEASE_GPG_PRIVATE_KEY`). Проверка перед записью на USB:
+
+   ```bash
+   gpg --no-default-keyring --keyring rootfs/etc-vlanit-release.pub \
+       --verify dist/VLANit-PBX-X.Y.Z-amd64.iso.sha256.asc
+   sha256sum -c dist/VLANit-PBX-X.Y.Z-amd64.iso.sha256
+   ```

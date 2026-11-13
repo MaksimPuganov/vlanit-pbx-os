@@ -73,11 +73,17 @@ pod + контейнеры + тома. Установщик и OTA работа�
 
 Портирование сборочной системы и golden rootfs на aarch64 (ARM-платы).
 
-## 11. Правило релизов
+## 11. Правило релизов — РЕАЛИЗОВАНО (1.2.6)
 
 - тег и файлы релиза не меняются после публикации;
-- каждый релиз собирает CI из запушенных исходников;
-- контрольные суммы подписаны (GPG).
+- каждый релиз собирает CI из запушенных исходников — push тега `v*`
+  триггерит workflow build-iso, релиз публикуется с этим тегом
+  (`--verify-tag`), ручной запуск сохранён как workflow_dispatch;
+- контрольные суммы подписаны GPG-ключом релиза
+  (`scripts/sign-release.sh`, pub — `rootfs/etc-vlanit-release.pub`,
+  приватный ключ — GitHub Secret `RELEASE_GPG_PRIVATE_KEY`);
+  проверка: `gpg --no-default-keyring --keyring rootfs/etc-vlanit-release.pub
+  --verify <file>.sha256.asc`.
 
 ## 12. Роль установки «edge»
 
