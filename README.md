@@ -27,6 +27,42 @@ MikoPBX в контейнере + Btrfs со снапшотами + предна
 - **Брендинг ОС**: фон и цвета GRUB (логотип), Plymouth-заставка,
   os-release, консольные баннеры, шрифт консоли с кириллицей (1.2.3).
 
+## Системные настройки по умолчанию (1.2.4)
+
+**Сеть (nftables, ADR-0003).** Политика `input: default drop`; открыто только
+необходимое (файл `/etc/nftables.conf` на устройстве):
+
+| Направление | Порты | Назначение |
+|---|---|---|
+| tcp | 22 | SSH устройства (root отключён, fail2ban) |
+| udp | 51820 | WireGuard |
+| tcp | 80, 443 | веб-интерфейс MikoPBX |
+| tcp | 5060, 5061 | SIP / SIP-TLS |
+| udp | 5060, 10000–10800 | SIP / RTP |
+
+Ограничение управления подсетями админа: заменить `accept` на
+`ip saddr { 10.x.0.0/16 } accept` для tcp/22 и udp/51820 в `/etc/nftables.conf`.
+Форвардинг разрешён только для WireGuard (road-warrior доступ к АТС).
+
+**SSH и вход.** Host-ключи генерируются при первой загрузке (`vlanit-firstboot`,
+обход `ConditionFirstBoot` + `reset-failed` rate limit). root по SSH запрещён,
+`MaxAuthTries 5`. Консоль — программа `login`, пароль локального администратора
+из мастера.
+
+**Журналы.** systemd-journald: `Storage=persistent`, `/var/log/journal`
+(subvolume `@var_log`), лимит `SystemMaxUse=200M` — журналы переживают перезагрузку.
+Журналы OTA/бэкапа: `/var/log/vlanit-update.log`, `/var/log/vlanit-backup.log`.
+
+**Контейнер АТС (quadlet).** `PidsLimit=4096`, `TimeoutStopSec=120`,
+`Restart=always`; сеть host + `NET_ADMIN`; конфигурационный файл — права `0600`
+(пароль веб-админа). `MemoryMax` осознанно не задан (риск для длинных звонков).
+
+**Кнопка питания (logind).** Короткое нажатие — игнор; длинное (>5 с) —
+штатное выключение. Случайное нажатие не роняет телефонию.
+
+**Время.** `systemd-timesyncd` (FallbackNTP: debian pool), часовой пояс —
+из мастера установки (`/etc/timezone`).
+
 ## Требования к сборочной машине
 
 - Debian 13 (trixie) amd64 (проверено), или иной Linux с Docker.
