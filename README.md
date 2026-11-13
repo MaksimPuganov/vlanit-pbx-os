@@ -63,6 +63,13 @@ MikoPBX в контейнере + Btrfs со снапшотами + предна
 **Время.** `systemd-timesyncd` (FallbackNTP: debian pool), часовой пояс —
 из мастера установки (`/etc/timezone`).
 
+## Трекер задач
+
+Плановая работа ведётся в [GitHub Issues](https://github.com/vlanit-com/vlanit-pbx-os/issues):
+майлстоун **1.3.0** — тестовая инфраструктура Т10–Т17 + vlanit-doctor.
+Метки: `test` (автотесты), `planned` (спека готова), `upstream`
+(зависит от MikoPBX), `field` (полевой фидбек), `security`.
+
 ## Плановые доработки
 
 - **Тестирование Т10–Т17** — дорожная карта: power-cut resilience,
