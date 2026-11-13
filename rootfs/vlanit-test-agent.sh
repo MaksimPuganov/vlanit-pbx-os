@@ -126,6 +126,23 @@ if [ -f /var/spool/mikopbx/storage/.vlanit-reboot-marker ]; then
     check "reboot-mikopbx-active" systemctl is-active --quiet mikopbx.service
     # журналы прошлой загрузки доступны (Storage=persistent)
     check "journal-persistent" sh -c "[ \"\$(journalctl -b -1 -n 1 2>/dev/null | wc -l)\" -gt 0 ]"
+    # пароль веб-админа ПЕРЕЖИЛ перезагрузку. ИЗВЕСТНАЯ ПРОБЛЕМА upstream
+    # (MikoPBX): provisioning применяет WEB_ADMIN_PASSWORD по маркеру
+    # CLOUD_INSTANCE_ID; после перезагрузки хэш в БД сброшен, маркер
+    # совпадает → повторное применение пропускается. Проверка WARN-уровня
+    # до исправления upstream; детект на устройстве — vlanit-firstboot.
+    for i in $(seq 1 60); do
+        podman logs mikopbx 2>/dev/null | grep -q "All services are fully loaded welcome" && break
+        sleep 5
+    done
+    PW="$(sed -n 's/^Environment=WEB_ADMIN_PASSWORD=//p' /etc/containers/systemd/mikopbx.container | head -1)"
+    if curl -sk --max-time 10 -X POST https://127.0.0.1/pbxcore/api/v3/auth:login \
+            -H 'Content-Type: application/json' \
+            -d "{\"login\":\"admin\",\"password\":\"$PW\"}" | grep -q accessToken; then
+        out "WARN-CHECK PASS reboot-api-login"
+    else
+        out "WARN-CHECK FAIL reboot-api-login (известная проблема upstream, см. troubleshooting)"
+    fi
     out "REBOOT_TEST_PASS"
 fi
 

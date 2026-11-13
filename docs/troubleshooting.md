@@ -26,6 +26,18 @@
 
 ## Podman / MikoPBX
 
+**Пароль веб-админа из мастера перестал приниматься после жёсткого
+отключения питания (стандартный admin/admin работает).**
+Механизм: env `WEB_ADMIN_PASSWORD` применяется provisioning'ом MikoPBX при
+первом старте; маркер применения хранится в `PbxSettings.CLOUD_INSTANCE_ID`
+(открытым текстом). Жёсткое отключение питания до checkpoint SQLite WAL
+откатывает запись хэша пароля, а маркер выживает → provisioning считает
+пароль «уже применённым» и не повторяет. Митигация: задать пароль заново
+через консоль MikoPBX (`podman exec -it mikopbx /etc/rc/console_menu`);
+постоянное исправление — в ожидании решения upstream. Регрессионная
+проверка: `reboot-api-login` в тест-агенте.
+
+
 - `systemctl status mikopbx` — служба Quadlet; генератор:
   `systemctl cat mikopbx.service`.
 - Образ отсутствует: `zcat /var/lib/vlanit/payload/mikopbx-*.tar.zst | podman load`.

@@ -45,7 +45,13 @@ MikoPBX (REBOOT_TEST_PASS).
 |---|---|
 | Т1–Т9 полный прогон | PASS (агент: 27 проверок, включая apt-security, timesyncd, quadlet 600, SSH_PORT=23) |
 
-Спека: `docs/specs/1.2.3-field-fixes.md`. Запланировано 1.2.4
+Спека: `docs/specs/1.2.3-field-fixes.md`. Известная проблема upstream (зафиксирована веб-QA 1.2.4): provisioning MikoPBX
+применяет `WEB_ADMIN_PASSWORD` по маркеру `CLOUD_INSTANCE_ID` — после перезагрузки
+хэш пароля сброшен, повторное применение пропускается. Детект: `vlanit-firstboot`
+(флаг `/var/lib/vlanit/atc-password-broken`), WARN-проверка `reboot-api-login`.
+См. troubleshooting.md.
+
+Запланировано 1.2.4
 (вход в систему, firewall, журналы, лимиты, питание):
 `docs/specs/1.2.4-system-hardening.md`, ADR-0003.
 
