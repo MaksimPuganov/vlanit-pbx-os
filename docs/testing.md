@@ -33,6 +33,19 @@ MikoPBX (REBOOT_TEST_PASS).
 
 ## Фактические результаты
 
+### Прогон 2026-11-13, ISO VLANit-PBX-1.2.6-amd64.iso (полевые фиксы, issue #15–#19)
+
+| Тест | Результат |
+|---|---|
+| Т1–Т9 полный прогон | PASS (агент: 42 проверки; WARN-CHECK reboot-api-login — известный upstream-баг #10) |
+
+Закрыты issue #15–#19 (фидбек теста 1.2.4): владение root (#1, guard сборки),
+убрано тестовое правило 10.0.2.0/24 (#2), VLANIT-ENV в [Container] quadlet
+(пароль веб-админа реально доходит), StopTimeout/PidsLimit в настройке
+/etc/vlanit/mikopbx-container.conf (120 с / 8192), ssh drop-in ssh-keygen -A
+(старт без падений), часовой пояс в TUI-мастере (Europe/Moscow default).
+Спека: `docs/specs/1.2.6-field-fixes.md`.
+
 ### Прогон 2026-11-13, ISO VLANit-PBX-1.2.5-amd64.iso (последнее ядро)
 
 | Тест | Результат |
