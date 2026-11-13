@@ -38,10 +38,38 @@ mmdebstrap \
     --include="$LIVE_PACKAGES" \
     trixie "$ROOTFS" http://deb.debian.org/debian
 
+# security/updates-источники ДО full-upgrade (иначе ядро не обновится)
+cat > "$ROOTFS/etc/apt/sources.list.d/debian.list" <<'EOF'
+deb http://deb.debian.org/debian trixie main contrib non-free-firmware
+deb http://deb.debian.org/debian-security trixie-security main contrib non-free-firmware
+deb http://deb.debian.org/debian trixie-updates main contrib non-free-firmware
+EOF
+rm -f "$ROOTFS/etc/apt/sources.list"
+
+# mmdebstrap очищает resolv.conf — без него apt в chroot не резолвит
+# (в rootfs это висячий symlink — cp не пишет через него)
+rm -f "$ROOTFS/etc/resolv.conf"
+cp -L /etc/resolv.conf "$ROOTFS/etc/resolv.conf"
 log "apt full-upgrade"
 chroot "$ROOTFS" sh -c '
     apt-get update -qq
     DEBIAN_FRONTEND=noninteractive apt-get -y -qq full-upgrade
+'
+log "проверка последнего ядра (live)"
+chroot "$ROOTFS" sh -c '
+    apt-get install -y -qq --only-upgrade linux-image-amd64
+    NEW_KVER=$(ls /lib/modules | sort -V | tail -1)
+    for d in /lib/modules/*; do
+        k=$(basename "$d")
+        [ "$k" = "$NEW_KVER" ] && continue
+        echo "purge old kernel: linux-image-$k"
+        DEBIAN_FRONTEND=noninteractive apt-get -y -qq purge "linux-image-$k"
+    done
+    apt-get autoremove -y -qq
+    INSTALLED=$(dpkg-query -W -f=\${Version} linux-image-amd64)
+    CANDIDATE=$(apt-cache policy linux-image-amd64 | awk "/Candidate:/{print \$2}")
+    echo "kernel installed=$INSTALLED candidate=$CANDIDATE"
+    [ "$INSTALLED" = "$CANDIDATE" ] || { echo "ОШИБКА: ядро устарело"; exit 1; }
 '
 
 log "локали (en_US.UTF-8, ru_RU.UTF-8)"
@@ -76,7 +104,7 @@ chroot "$ROOTFS" systemctl mask ssh.service 2>/dev/null || true
 chroot "$ROOTFS" systemctl enable vlanit-installer.service 2>/dev/null || true
 
 # очистка
-rm -f "$ROOTFS/etc/machine-id" "$ROOTFS/var/lib/dbus/machine-id"
+rm -f "$ROOTFS/etc/resolv.conf" "$ROOTFS/etc/machine-id" "$ROOTFS/var/lib/dbus/machine-id"
 touch "$ROOTFS/etc/machine-id"
 rm -f "$ROOTFS/etc/ssh/ssh_host_"*
 find "$ROOTFS/var/log" -type f -delete 2>/dev/null || true

@@ -27,6 +27,11 @@ MikoPBX в контейнере + Btrfs со снапшотами + предна
 - **Брендинг ОС**: фон и цвета GRUB (логотип), Plymouth-заставка,
   os-release, консольные баннеры, шрифт консоли с кириллицей (1.2.3).
 
+- **Полное обновление при сборке (1.2.5)**: все пакеты golden/live
+  rootfs — последних версий (trixie + updates + security), в образ всегда
+  попадает последнее ядро (`linux-image-amd64` == Candidate), старые ядра
+  вычищаются. Guard в сборке: несовпадение версии ядра = ошибка шага.
+
 ## Системные настройки по умолчанию (1.2.4)
 
 **Сеть (nftables, ADR-0003).** Политика `input: default drop`; открыто только
@@ -109,7 +114,7 @@ bash scripts/test-qemu.sh all        # все сценарии
 bash scripts/test-qemu.sh install    # только установка/загрузка/MikoPBX
 
 # запись на USB (требует root, ДЕСТРУКТИВНО)
-sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.2.4-amd64.iso /dev/sdX
+sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.2.5-amd64.iso /dev/sdX
 # другие способы (dd, GNOME Disks, KDE ISO Image Writer, Rufus, balenaEtcher,
 # macOS dd, Ventoy) — docs/installation.md, раздел «Создание загрузочной флэшки»
 
@@ -120,8 +125,8 @@ make clean          # очистка build/{rootfs,live,iso-staging}, dist
 
 | Путь | Назначение |
 |---|---|
-| `dist/VLANit-PBX-1.2.4-amd64.iso` | итоговый загрузочный ISO (UEFI) |
-| `dist/VLANit-PBX-1.2.4-amd64.iso.sha256` | контрольная сумма |
+| `dist/VLANit-PBX-1.2.5-amd64.iso` | итоговый загрузочный ISO (UEFI) |
+| `dist/VLANit-PBX-1.2.5-amd64.iso.sha256` | контрольная сумма |
 | `build/payload/mikopbx-*.tar.zst` | экспортированный образ MikoPBX (+sha256) |
 | `build/payload/golden.tar.zst` | Golden Image устанавливаемой системы |
 | `build/logs/` | журналы шагов сборки |

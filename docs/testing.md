@@ -33,6 +33,19 @@ MikoPBX (REBOOT_TEST_PASS).
 
 ## Фактические результаты
 
+### Прогон 2026-11-13, ISO VLANit-PBX-1.2.5-amd64.iso (последнее ядро)
+
+| Тест | Результат |
+|---|---|
+| Т1–Т9 полный прогон | PASS (агент: 36 проверок; WARN-CHECK reboot-api-login — известный upstream-баг #10) |
+| Ядро в образе | 6.12.116+deb13-amd64 (guard: installed==candidate 6.12.116-1), golden.tar.zst 471M → 322M |
+
+Спека: `docs/specs/1.2.5-kernel-latest.md`. Корни: mmdebstrap очищает
+resolv.conf (apt в chroot молча не резолвил), security-источники писались
+после full-upgrade. Защита: sources до full-upgrade, rm -f висячего
+symlink + cp resolv.conf, guard `--only-upgrade linux-image-amd64` с
+проверкой Installed==Candidate, явный purge старых ядер, факты с sort -V.
+
 ### Прогон 2026-11-13, ISO VLANit-PBX-1.2.4-amd64.iso (system hardening)
 
 | Тест | Результат |

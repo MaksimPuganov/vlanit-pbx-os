@@ -42,15 +42,8 @@ mmdebstrap \
     --include="$GOLDEN_PACKAGES" \
     trixie "$ROOTFS" http://deb.debian.org/debian
 
-# все пакеты — последних версий (security/updates на момент сборки)
-log "apt full-upgrade"
-chroot "$ROOTFS" sh -c '
-    apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get -y -qq full-upgrade
-'
-
-# security/updates-источники (mmdebstrap пишет только базовый сьют;
-# без trixie-security unattended-upgrades нечего обновлять)
+# security/updates-источники (mmdebstrap пишет только базовый сьют) —
+# ДО full-upgrade, иначе security-апгрейды (в т.ч. ядро) не подтягиваются
 log "apt sources: trixie + updates + security"
 cat > "$ROOTFS/etc/apt/sources.list.d/debian.list" <<'EOF'
 deb http://deb.debian.org/debian trixie main contrib non-free-firmware
@@ -58,6 +51,38 @@ deb http://deb.debian.org/debian-security trixie-security main contrib non-free-
 deb http://deb.debian.org/debian trixie-updates main contrib non-free-firmware
 EOF
 rm -f "$ROOTFS/etc/apt/sources.list"
+
+# все пакеты — последних версий (security/updates на момент сборки)
+# mmdebstrap очищает resolv.conf — без него apt в chroot не резолвит
+# (в rootfs это висячий symlink /run/systemd/resolve/... — cp не пишет через него)
+rm -f "$ROOTFS/etc/resolv.conf"
+cp -L /etc/resolv.conf "$ROOTFS/etc/resolv.conf"
+log "apt full-upgrade"
+chroot "$ROOTFS" sh -c '
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get -y -qq full-upgrade
+'
+# гарантия последнего ядра: full-upgrade может его пропустить, если метапакет
+# уже установлен — догоняем явно и проверяем, чтоInstalled == Candidate
+log "проверка последнего ядра"
+chroot "$ROOTFS" sh -c '
+    apt-get install -y -qq --only-upgrade linux-image-amd64
+    # старое ядро (оставшееся после обновления метапакета) — вычищаем явно:
+    # autoremove не всегда помечает его orphaned (зависит от того, как пакет
+    # попал в систему), а два ядра раздувают образ и портят факты версий
+    NEW_KVER=$(ls /lib/modules | sort -V | tail -1)
+    for d in /lib/modules/*; do
+        k=$(basename "$d")
+        [ "$k" = "$NEW_KVER" ] && continue
+        echo "purge old kernel: linux-image-$k"
+        DEBIAN_FRONTEND=noninteractive apt-get -y -qq purge "linux-image-$k"
+    done
+    apt-get autoremove -y -qq
+    INSTALLED=$(dpkg-query -W -f=\${Version} linux-image-amd64)
+    CANDIDATE=$(apt-cache policy linux-image-amd64 | awk "/Candidate:/{print \$2}")
+    echo "kernel installed=$INSTALLED candidate=$CANDIDATE"
+    [ "$INSTALLED" = "$CANDIDATE" ] || { echo "ОШИБКА: ядро устарело"; exit 1; }
+'
 
 # --- установка VLANit-компонентов в rootfs ---
 log "копирование VLANit provisioning / quadlet / snapshots"
@@ -178,6 +203,9 @@ for unit in vlanit-firstboot.service vlanit-test-agent.service \
 done
 
 # --- очистка уникальных идентификаторов (критично для Golden Image) ---
+# resolv.conf был нужен только для сборочных apt-операций
+rm -f "$ROOTFS/etc/resolv.conf"
+
 log "очистка machine-id, SSH host keys, журналов"
 rm -f "$ROOTFS/etc/machine-id" "$ROOTFS/var/lib/dbus/machine-id"
 touch "$ROOTFS/etc/machine-id"  # systemd сгенерирует при первой загрузке
@@ -190,7 +218,7 @@ rm -rf "$ROOTFS/var/cache/apt/"* "$ROOTFS/var/lib/apt/lists/"*
 
 # --- факты версий для манифеста ---
 DEBIAN_VERSION="$(cat "$ROOTFS/etc/debian_version")"
-KERNEL_VERSION="$(basename "$(ls -d "$ROOTFS"/lib/modules/* | head -1)")"
+KERNEL_VERSION="$(basename "$(ls -d "$ROOTFS"/lib/modules/* | sort -V | tail -1)")"
 PODMAN_VERSION="$(chroot "$ROOTFS" dpkg-query -W -f='${Version}' podman 2>/dev/null || echo unknown)"
 cat > "$BUILD_DIR/facts.json" <<EOF
 {
