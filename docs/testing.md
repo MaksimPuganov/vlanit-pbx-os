@@ -39,6 +39,10 @@ MikoPBX (REBOOT_TEST_PASS).
 |---|---|
 | Т1–Т9 полный прогон | PASS (агент: 27 проверок, включая apt-security, timesyncd, quadlet 600, SSH_PORT=23) |
 
+Спека: `docs/specs/1.2.3-field-fixes.md`. Запланировано 1.2.4
+(вход в систему, firewall, журналы, лимиты, питание):
+`docs/specs/1.2.4-system-hardening.md`, ADR-0003.
+
 ### Прогон 2026-11-13, ISO VLANit-PBX-1.2.1-amd64.iso (USB-boot, брендинг, чистка)
 
 | Тест | Результат |

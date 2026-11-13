@@ -105,6 +105,29 @@ fstab генерируется по UUID. Монтирование: `compress=zs
 | `vlanit-firstboot.service` | одноразовая первичная настройка (маркер `/var/lib/vlanit/firstboot-done`) |
 | `mikopbx.service` | quadlet-служба контейнера MikoPBX |
 | `vlanit-test-agent.service` | только при `VLANIT_TEST=1` в cmdline (QUI-тесты) |
+| `systemd-timesyncd.service` | NTP-синхронизация (1.2.3; FallbackNTP pool.ntp.org) |
+| `nftables.service` | firewall: input policy drop, явные разрешения (1.2.4, ADR-0003) |
+| `sshd-keygen` + `ssh-keygen -A` в firstboot | host-ключи SSH (1.2.4: обход ConditionFirstBoot=yes) |
+
+## Журналы и аудит
+
+- systemd-journald: `Storage=persistent`, каталог `/var/log/journal`
+  (Btrfs subvolume `@var_log`), `SystemMaxUse=200M` — журналы переживают
+  перезагрузку (1.2.4).
+- Аудит безопасности: `/cso` (daily). Отчёт 1.2.2: `.gstack/security-reports/2026-11-13-014500.json`
+  (HIGH #1 — пароль в quadlet 0644 — исправлено в 1.2.3 правами 0600).
+
+## Кнопка питания
+
+logind (`/etc/systemd/logind.conf.d/01-vlanit.conf`, 1.2.4):
+короткое нажатие — игнор, длинное (>5 с) — штатное выключение.
+Апплаенс: случайное нажатие не должно ронять телефонию.
+
+## Контейнер MikoPBX (лимиты, 1.2.4)
+
+`PidsLimit=4096`, `TimeoutStopSec=120` в quadlet (по умолчанию podman:
+2048 pids, стоп 10 с — недостаточно для корректного завершения АТС).
+`MemoryMax` — осознанно не задан (жёсткий лимит рискован для длинных звонков).
 
 ## Безопасность установщика
 
