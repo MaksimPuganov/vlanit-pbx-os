@@ -63,6 +63,13 @@ MikoPBX в контейнере + Btrfs со снапшотами + предна
 **Время.** `systemd-timesyncd` (FallbackNTP: debian pool), часовой пояс —
 из мастера установки (`/etc/timezone`).
 
+## Плановые доработки
+
+- **`vlanit-doctor`** (1.3.0) — диагностический скрипт установленной ОС:
+  одна команда сводного контроля здоровья (33 группы проверок от тест-агента),
+  вывод OK/FAIL/SKIP, код возврата, `--fix-hints`, `--json`. Спека:
+  `docs/specs/planned-vlanit-doctor.md`.
+
 ## Требования к сборочной машине
 
 - Debian 13 (trixie) amd64 (проверено), или иной Linux с Docker.
