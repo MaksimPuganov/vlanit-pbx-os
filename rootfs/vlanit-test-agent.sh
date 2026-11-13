@@ -99,6 +99,11 @@ check "console-font-cyrillic" grep -q "^FONT=CyrSlav" /etc/vconsole.conf
 check "quadlet-perms-600" sh -c "stat -c %a /etc/containers/systemd/mikopbx.container | grep -q 600"
 check "atc-ssh-port-23" sh -c "podman exec mikopbx sh -c 'test \"\$SSH_PORT\" = 23'"
 check "atc-password-nonempty" sh -c "grep -q 'WEB_ADMIN_PASSWORD=..' /etc/containers/systemd/mikopbx.container"
+# пароль из мастера РЕАЛЬНО дошёл до контейнера (переменная в [Container],
+# а не только в файле) и логин ей проходит (полевой дефект 1.2.4 #3)
+check "atc-env-in-container" sh -c "podman exec mikopbx sh -c 'env | grep -q ^WEB_ADMIN_PASSWORD='"
+# лимит остановки контейнера: 120 с, а не дефолтные 10 (полевой дефект 1.2.4 #4)
+check "atc-stop-timeout" sh -c "podman inspect mikopbx --format '{{.Config.StopTimeout}}' | grep -qx 120"
 
 # --- 1.2.4: системная интеграция и харденинг ---
 check "bin-login-present" sh -c "test -x /usr/bin/login"
@@ -108,6 +113,15 @@ check "ssh-host-keys" sh -c '
   ls /etc/ssh/ssh_host_* >/dev/null 2>&1 && systemctl is-active --quiet ssh
 '
 check "nft-policy-drop" sh -c "nft list ruleset 2>/dev/null | grep -q 'policy drop'"
+# тестовая подсеть QEMU не должна уезжать в образ (полевой дефект 1.2.4 #2)
+check "nft-no-testnet" sh -c "! nft list ruleset 2>/dev/null | grep -q '10\.0\.2\.0/24'"
+# файлы системы — root, а не uid сборочного пользователя (дефект 1.2.4 #1);
+# /home исключён (домашний каталог администратора legitimately uid 1000)
+check "files-root-owned" sh -c "test \"\$(find / -xdev -uid 1000 -not -path '/home/*' 2>/dev/null | wc -l)\" -eq 0"
+check "sudo-works" sh -c "test \"\$(stat -c %u /usr/bin/sudo)\" = 0 && test -u /usr/bin/sudo && /usr/bin/sudo -n true 2>/dev/null || { test \"\$(stat -c %u /usr/bin/sudo)\" = 0 && test -u /usr/bin/sudo; }"
+# ssh.service не должен падать на старте: ключи генерируются drop-in'ом
+# ДО sshd (полевой дефект 1.2.4 #5)
+check "ssh-clean-start" sh -c "systemctl show ssh.service -p NRestarts --value | grep -qx 0 && systemctl is-active --quiet ssh.service"
 check "pids-limit" sh -c "podman inspect mikopbx --format '{{.HostConfig.PidsLimit}}' 2>/dev/null | grep -q 4096"
 check "handle-power-key" sh -c "busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandlePowerKey 2>/dev/null | grep -q ignore"
 # journal-persistent проверяется после reboot-фазы (см. ниже)
@@ -136,6 +150,7 @@ if [ -f /var/spool/mikopbx/storage/.vlanit-reboot-marker ]; then
         sleep 5
     done
     PW="$(sed -n 's/^Environment=WEB_ADMIN_PASSWORD=//p' /etc/containers/systemd/mikopbx.container | head -1)"
+    PW="${PW%\"}"; PW="${PW#\"}"
     if curl -sk --max-time 10 -X POST https://127.0.0.1/pbxcore/api/v3/auth:login \
             -H 'Content-Type: application/json' \
             -d "{\"login\":\"admin\",\"password\":\"$PW\"}" | grep -q accessToken; then

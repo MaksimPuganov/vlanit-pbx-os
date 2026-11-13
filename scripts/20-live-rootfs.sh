@@ -86,6 +86,8 @@ log "установка VLANit Installer и provisioning"
 install -d -m 0755 "$ROOTFS/opt/vlanit"
 cp -a "$PROJECT_ROOT/installer/." "$ROOTFS/opt/vlanit/installer/"
 cp -a "$PROJECT_ROOT/provisioning/." "$ROOTFS/opt/vlanit/provisioning/"
+# владение — строго root (cp -a сохраняет uid сборочной машины; полевой дефект 1.2.4)
+chown -R root:root "$ROOTFS/opt/vlanit"
 install -D -m 0755 "$PROJECT_ROOT/live/vlanit-init" "$ROOTFS/opt/vlanit/vlanit-init"
 install -D -m 0755 "$PROJECT_ROOT/live/initramfs-hook-vlanit-live" \
     "$ROOTFS/etc/initramfs-tools/hooks/vlanit-live"
@@ -110,6 +112,13 @@ rm -f "$ROOTFS/etc/ssh/ssh_host_"*
 find "$ROOTFS/var/log" -type f -delete 2>/dev/null || true
 rm -rf "$ROOTFS/var/cache/apt/"* "$ROOTFS/var/lib/apt/lists/"*
 
+# guard владения (аналогично 10-golden-rootfs.sh)
+STRAY_OWNERS="$(find "$ROOTFS" -xdev \( -uid +999 -o -gid +999 \) -print -quit 2>/dev/null)"
+[ -z "$STRAY_OWNERS" ] || {
+    echo "ОШИБКА: файлы не в root-владении в Live rootfs, первый: $STRAY_OWNERS" >&2
+    find "$ROOTFS" -xdev \( -uid +999 -o -gid +999 \) -print | head -20 >&2
+    exit 1
+}
 log "squashfs -> live/rootfs.squashfs"
 mksquashfs "$ROOTFS" "$STAGING/live/rootfs.squashfs" \
     -comp zstd -Xcompression-level 15 -noappend -quiet

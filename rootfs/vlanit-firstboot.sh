@@ -68,6 +68,8 @@ date -Is > /var/lib/vlanit/firstboot-done
 QUADLET_PW=""
 grep -q "WEB_ADMIN_PASSWORD=" /etc/containers/systemd/mikopbx.container && \
     QUADLET_PW="$(sed -n 's/^Environment=WEB_ADMIN_PASSWORD=//p' /etc/containers/systemd/mikopbx.container | head -1)"
+# снять окаймляющие кавычки (systemd-формат, добавляет configure_target_mikopbx)
+QUADLET_PW="${QUADLET_PW%\"}"; QUADLET_PW="${QUADLET_PW#\"}"
 if [ -n "$QUADLET_PW" ]; then
     log "проверка пароля веб-админа MikoPBX"
     sleep 20   # дать контейнеру поднять веб

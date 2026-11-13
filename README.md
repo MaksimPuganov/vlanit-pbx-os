@@ -49,10 +49,21 @@ MikoPBX в контейнере + Btrfs со снапшотами + предна
 `ip saddr { 10.x.0.0/16 } accept` для tcp/22 и udp/51820 в `/etc/nftables.conf`.
 Форвардинг разрешён только для WireGuard (road-warrior доступ к АТС).
 
-**SSH и вход.** Host-ключи генерируются при первой загрузке (`vlanit-firstboot`,
-обход `ConditionFirstBoot` + `reset-failed` rate limit). root по SSH запрещён,
+**SSH и вход.** Host-ключи генерируются drop-in'ом `ssh.service.d/00-keygen.conf`
+(`ssh-keygen -A` до старта sshd; с 1.2.6 — ssh.service стартует без падений,
+firstboot-логика осталась идемпотентной подстраховкой). root по SSH запрещён,
 `MaxAuthTries 5`. Консоль — программа `login`, пароль локального администратора
 из мастера.
+
+**Владение файлами (1.2.6).** Вся система — root:root (guard сборки:
+файлы uid/gid ≥ 1000 обрывают сборку; сборка только в build-контейнере,
+`make iso`). sudo: root-owned + setuid, с паролем администратора.
+
+**Контейнер АТС (quadlet).** Секция `[Container]`: `PidsLimit=4096`,
+`StopTimeout=120` (с 1.2.6; раньше контейнер убивался через 10 с),
+env-параметры VLANit (в т.ч. `WEB_ADMIN_PASSWORD`) — блок `VLANIT-ENV`
+строго в `[Container]` (Quadlet передаёт `Environment=` в контейнер
+только оттуда; кавычкование значений с пробелами). Файл quadlet: 0600.
 
 **Журналы.** systemd-journald: `Storage=persistent`, `/var/log/journal`
 (subvolume `@var_log`), лимит `SystemMaxUse=200M` — журналы переживают перезагрузку.
@@ -114,7 +125,7 @@ bash scripts/test-qemu.sh all        # все сценарии
 bash scripts/test-qemu.sh install    # только установка/загрузка/MikoPBX
 
 # запись на USB (требует root, ДЕСТРУКТИВНО)
-sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.2.5-amd64.iso /dev/sdX
+sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.2.6-amd64.iso /dev/sdX
 # другие способы (dd, GNOME Disks, KDE ISO Image Writer, Rufus, balenaEtcher,
 # macOS dd, Ventoy) — docs/installation.md, раздел «Создание загрузочной флэшки»
 
@@ -125,8 +136,8 @@ make clean          # очистка build/{rootfs,live,iso-staging}, dist
 
 | Путь | Назначение |
 |---|---|
-| `dist/VLANit-PBX-1.2.5-amd64.iso` | итоговый загрузочный ISO (UEFI) |
-| `dist/VLANit-PBX-1.2.5-amd64.iso.sha256` | контрольная сумма |
+| `dist/VLANit-PBX-1.2.6-amd64.iso` | итоговый загрузочный ISO (UEFI) |
+| `dist/VLANit-PBX-1.2.6-amd64.iso.sha256` | контрольная сумма |
 | `build/payload/mikopbx-*.tar.zst` | экспортированный образ MikoPBX (+sha256) |
 | `build/payload/golden.tar.zst` | Golden Image устанавливаемой системы |
 | `build/logs/` | журналы шагов сборки |

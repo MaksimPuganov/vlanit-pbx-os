@@ -89,6 +89,10 @@ log "копирование VLANit provisioning / quadlet / snapshots"
 install -d -m 0755 "$ROOTFS/opt/vlanit"
 cp -a "$PROJECT_ROOT/provisioning/." "$ROOTFS/opt/vlanit/provisioning/"
 cp -a "$PROJECT_ROOT/snapshots/vlanit-snapshot" "$ROOTFS/opt/vlanit/"
+# владение — строго root: cp -a сохраняет uid хостовой сборочной машины
+# (в rootless-режиме — uid 1000), что ломает sudo и права в установленной
+# системе (полевой дефект 1.2.4)
+chown -R root:root "$ROOTFS/opt/vlanit"
 install -D -m 0644 "$PROJECT_ROOT/quadlet/mikopbx.container" \
     "$ROOTFS/etc/containers/systemd/mikopbx.container"
 # пароль веб-админа — в файле; читает только root (аудит cso #1)
@@ -125,6 +129,8 @@ install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-apt-20vlanit-auto-upgrades" \
     "$ROOTFS/etc/apt/apt.conf.d/20vlanit-auto-upgrades"
 install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-ssh-01-vlanit.conf" \
     "$ROOTFS/etc/ssh/sshd_config.d/01-vlanit.conf"
+install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-ssh-service-d-00-keygen.conf" \
+    "$ROOTFS/etc/systemd/system/ssh.service.d/00-keygen.conf"
 install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-fail2ban-vlanit-sshd.conf" \
     "$ROOTFS/etc/fail2ban/jail.d/vlanit-sshd.conf"
 
@@ -230,6 +236,16 @@ EOF
 log "факты: Debian $DEBIAN_VERSION, kernel $KERNEL_VERSION, podman $PODMAN_VERSION"
 
 # --- упаковка ---
+# guard владения: в Golden Image не должно быть файлов uid/gid >= 1000
+# (системные пользователи пакетов — < 1000). Иначе установленная система
+# получит файлы пользователя сборки — sudo/shadow в чужом владении, и
+# установка фактически сломана (полевой дефект 1.2.4).
+STRAY_OWNERS="$(find "$ROOTFS" -xdev \( -uid +999 -o -gid +999 \) -print -quit 2>/dev/null)"
+[ -z "$STRAY_OWNERS" ] || {
+    echo "ОШИБКА: файлы не в root-владении в Golden Image, первый: $STRAY_OWNERS" >&2
+    find "$ROOTFS" -xdev \( -uid +999 -o -gid +999 \) -print | head -20 >&2
+    exit 1
+}
 log "упаковка golden.tar.zst"
 tar -C "$ROOTFS" --zstd -cpf "$PAYLOAD/golden.tar.zst" .
 ( cd "$PAYLOAD" && sha256sum golden.tar.zst > golden.tar.zst.sha256 )

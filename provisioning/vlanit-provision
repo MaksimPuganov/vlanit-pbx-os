@@ -109,7 +109,13 @@ def main() -> None:
             if key not in ALLOWED_MIKOPBX_ENV:
                 die(f"неподтверждённый параметр mikopbx.env.{key} — отказ")
             env_pairs.append((key, str(value)))
-        lines = [f"Environment={k}={v}" for k, v in env_pairs]
+        lines = []
+        for k, v in env_pairs:
+            v = str(v)
+            # systemd/quadlet-формат: пробелы/кавычки — только в кавычках
+            if any(c.isspace() for c in v) or '"' in v:
+                v = '"' + v.replace('\\', '\\\\').replace('"', '\\"') + '"'
+            lines.append(f"Environment={k}={v}")
         content = "\n".join(lines) + ("\n" if lines else "")
         if QUADLET_PATH.exists():
             text = QUADLET_PATH.read_text(encoding="utf-8")
@@ -122,9 +128,11 @@ def main() -> None:
                     text, flags=re.S,
                 )
             else:
+                # блок должен попасть в секцию [Container]: только оттуда
+                # Quadlet передаёт Environment= в контейнер (дефект 1.2.4)
                 text = text.replace(
-                    "[Service]",
-                    f"[Service]\n{begin}\n{content.rstrip()}\n{end}\n",
+                    "[Container]",
+                    f"[Container]\n{begin}\n{content.rstrip()}\n{end}\n",
                 )
             QUADLET_PATH.write_text(text, encoding="utf-8")
         ENV_PATH.parent.mkdir(parents=True, exist_ok=True)

@@ -146,6 +146,8 @@ else
     [ "${#ADMIN_PASS}" -ge 8 ] || { dialog --msgbox "Пароль короче 8 символов." 7 50; exit 1; }
     c="$(dialog --title "SSH" --menu "SSH-сервер:" 9 60 3 1 "Включить" 2 "Отключить" --stdout)" || exit 1
     [ "$c" = "2" ] && SSH_ENABLED="no"
+    TZ_NAME="$(dialog --title "Часовой пояс" --inputbox "Часовой пояс (IANA, напр. Europe/Moscow):" 8 60 "Europe/Moscow" --stdout)" || exit 1
+    [ -f "/usr/share/zoneinfo/$TZ_NAME" ] || { dialog --msgbox "Неизвестный часовой пояс: $TZ_NAME" 7 60; exit 1; }
     c="$(dialog --title "WireGuard VPN" --menu "Настроить WireGuard (своя пара ключей, автозапуск):" \
         9 64 3 1 "Да, включить" 2 "Нет" --stdout)" || exit 1
     if [ "$c" = "1" ]; then
@@ -188,6 +190,7 @@ else
     summary="Целевой диск: $TARGET_DISK
 Режим сети: $NET_MODE (интерфейс $NET_IFACE)
 Hostname: $SYS_HOSTNAME
+Часовой пояс: $TZ_NAME
 Админ: $ADMIN_USER
 SSH: $SSH_ENABLED
 Имя АТС: $PBX_NAME

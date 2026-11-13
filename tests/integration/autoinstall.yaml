@@ -2,7 +2,7 @@
 # НЕ использовать на реальном железе: подтверждение заменено confirm: yes.
 disk: /dev/vda
 hostname: vlanit-pbx-test
-timezone: UTC
+timezone: Europe/Moscow
 kernel_args: "VLANIT_TEST=1 console=ttyS0,115200 console=tty0"
 
 network:

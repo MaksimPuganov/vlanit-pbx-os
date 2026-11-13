@@ -19,6 +19,9 @@ Environment=ID_WWW_GROUP=1001
 Environment=SSH_PORT=23
 
 PidsLimit=4096
+# лимит времени на остановку контейнера (SIGTERM -> SIGKILL): MikoPBX
+# корректно завершает звонки/записи дольше 10 с дефолта (полевой дефект 1.2.4)
+StopTimeout=120
 
 [Service]
 Restart=always

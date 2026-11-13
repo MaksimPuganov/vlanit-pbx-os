@@ -113,19 +113,30 @@ configure_target_mikopbx() {
     local pbx_name="$1" admin_login="$2" admin_pass="$3"
     local quadlet="$SYS_MNT/etc/containers/systemd/mikopbx.container"
     [ -f "$quadlet" ] || die "quadlet-файл отсутствует в Golden Image"
-    # блок VLANIT-ENV (идемпотентно, маркеры совместимы с vlanit-provision)
+    # блок VLANIT-ENV (идемпотентно, маркеры совместимы с vlanit-provision).
+    # ВАЖНО: блок должен быть в секции [Container] — Quadlet передаёт
+    # Environment= в контейнер (--env) только оттуда; из [Service] переменная
+    # остаётся окружением systemd-юнита, контейнер её не видит (дефект 1.2.4:
+    # пароль веб-админа «из мастера» не доходил до MikoPBX).
     if ! grep -q "# VLANIT-ENV-BEGIN" "$quadlet"; then
-        sed -i 's/^\[Service\]$/[Service]\n# VLANIT-ENV-BEGIN\n# VLANIT-ENV-END/' "$quadlet"
+        sed -i 's/^\[Container\]$/[Container]\n# VLANIT-ENV-BEGIN\n# VLANIT-ENV-END/' "$quadlet"
     fi
     python3 - "$quadlet" "$pbx_name" "$admin_login" "$admin_pass" <<'PYEOF'
 import sys
 path, name, login, passwd = sys.argv[1:5]
+
+def q(v: str) -> str:
+    # systemd/quadlet-формат: значения с пробелами/спецсимволами — в кавычках
+    if any(c.isspace() for c in v) or '"' in v:
+        return '"' + v.replace('\\', '\\\\').replace('"', '\\"') + '"'
+    return v
+
 text = open(path).read()
 block = (
     "# VLANIT-ENV-BEGIN\n"
-    f"Environment=PBX_NAME={name}\n"
-    f"Environment=WEB_ADMIN_LOGIN={login}\n"
-    f"Environment=WEB_ADMIN_PASSWORD={passwd}\n"
+    f"Environment=PBX_NAME={q(name)}\n"
+    f"Environment=WEB_ADMIN_LOGIN={q(login)}\n"
+    f"Environment=WEB_ADMIN_PASSWORD={q(passwd)}\n"
     "# VLANIT-ENV-END"
 )
 import re

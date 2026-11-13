@@ -12,7 +12,7 @@
 проверяет смонтированные разделы и требует явного подтверждения.
 
 ```bash
-sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.2.5-amd64.iso /dev/sdX
+sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.2.6-amd64.iso /dev/sdX
 ```
 
 (`/dev/sdX` — ваша флэшка, например `/dev/sdb`; точное имя смотрите
@@ -59,7 +59,7 @@ diskutil eject /dev/disk4
 ### Проверка записи
 
 ```bash
-sha256sum -c dist/VLANit-PBX-1.2.5-amd64.iso.sha256   # сверить образ до записи
+sha256sum -c dist/VLANit-PBX-1.2.6-amd64.iso.sha256   # сверить образ до записи
 # после записи — сравнить первые блоки (Linux):
 sudo head -c 1G /dev/sdX | sha256sum   # должно совпасть с началом образа
 ```
@@ -88,6 +88,13 @@ Live-среда загрузится и автоматически запуст�
 
 Минимальный размер диска — 50 GiB (EFI 1 + System 40 + Data 9).
 При меньшем объёме установка блокируется с пояснением.
+
+## Часовой пояс
+
+Мастер (экран «Система», с 1.2.6) спрашивает IANA-часовой пояс
+(по умолчанию `Europe/Moscow`). Установщик пишет `/etc/timezone` и
+`/etc/localtime`; синхронизация времени — systemd-timesyncd.
+Через autoinstall.yaml: ключ `timezone` (например `Europe/Moscow`).
 
 ## WireGuard VPN (преднастройка при установке)
 
