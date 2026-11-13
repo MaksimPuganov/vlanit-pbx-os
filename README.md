@@ -59,11 +59,13 @@ firstboot-логика осталась идемпотентной подстр�
 файлы uid/gid ≥ 1000 обрывают сборку; сборка только в build-контейнере,
 `make iso`). sudo: root-owned + setuid, с паролем администратора.
 
-**Контейнер АТС (quadlet).** Секция `[Container]`: `PidsLimit=4096`,
-`StopTimeout=120` (с 1.2.6; раньше контейнер убивался через 10 с),
-env-параметры VLANit (в т.ч. `WEB_ADMIN_PASSWORD`) — блок `VLANIT-ENV`
-строго в `[Container]` (Quadlet передаёт `Environment=` в контейнер
-только оттуда; кавычкование значений с пробелами). Файл quadlet: 0600.
+**Контейнер АТС (quadlet).** Секция `[Container]`: `PidsLimit` и
+`StopTimeout` задаются установщиком из `/etc/vlanit/mikopbx-container.conf`
+(по умолчанию 8192 и 120 с; issue #16 — раньше контейнер убивался через
+10 с, лимит был жёстко 4096), env-параметры VLANit (в т.ч.
+`WEB_ADMIN_PASSWORD`) — блок `VLANIT-ENV` строго в `[Container]` (Quadlet
+передаёт `Environment=` в контейнер только оттуда; кавычкование значений
+с пробелами). Файл quadlet: 0600.
 
 **Журналы.** systemd-journald: `Storage=persistent`, `/var/log/journal`
 (subvolume `@var_log`), лимит `SystemMaxUse=200M` — журналы переживают перезагрузку.
