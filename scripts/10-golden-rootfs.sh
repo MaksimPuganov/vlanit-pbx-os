@@ -112,6 +112,10 @@ install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-issue" \
 install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-motd" \
     "$ROOTFS/etc/motd"
 
+# Параметры контейнера АТС (issue #16): установщик читает и пишет в quadlet
+install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-vlanit-mikopbx-container.conf" \
+    "$ROOTFS/etc/vlanit/mikopbx-container.conf"
+
 # OTA: команды обновления/отката, ключ релиза, конфиг канала
 install -D -m 0755 "$PROJECT_ROOT/snapshots/vlanit-update" \
     "$ROOTFS/usr/local/sbin/vlanit-update"

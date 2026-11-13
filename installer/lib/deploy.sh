@@ -121,6 +121,17 @@ configure_target_mikopbx() {
     if ! grep -q "# VLANIT-ENV-BEGIN" "$quadlet"; then
         sed -i 's/^\[Container\]$/[Container]\n# VLANIT-ENV-BEGIN\n# VLANIT-ENV-END/' "$quadlet"
     fi
+    # параметры контейнера из настройки устройства (issue #16):
+    # /etc/vlanit/mikopbx-container.conf (STOP_TIMEOUT, PIDS_LIMIT)
+    local stop_timeout=120 pids_limit=8192
+    if [ -f "$SYS_MNT/etc/vlanit/mikopbx-container.conf" ]; then
+        stop_timeout="$(sed -n 's/^STOP_TIMEOUT=//p' "$SYS_MNT/etc/vlanit/mikopbx-container.conf" | head -1)"
+        pids_limit="$(sed -n 's/^PIDS_LIMIT=//p' "$SYS_MNT/etc/vlanit/mikopbx-container.conf" | head -1)"
+    fi
+    case "$stop_timeout" in ''|*[!0-9]*) stop_timeout=120 ;; esac
+    case "$pids_limit"   in ''|*[!0-9]*) pids_limit=8192  ;; esac
+    sed -i -E "s/^StopTimeout=.*/StopTimeout=$stop_timeout/" "$quadlet"
+    sed -i -E "s/^PidsLimit=.*/PidsLimit=$pids_limit/" "$quadlet"
     python3 - "$quadlet" "$pbx_name" "$admin_login" "$admin_pass" <<'PYEOF'
 import sys
 path, name, login, passwd = sys.argv[1:5]

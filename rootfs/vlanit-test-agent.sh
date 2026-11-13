@@ -122,7 +122,7 @@ check "sudo-works" sh -c "test \"\$(stat -c %u /usr/bin/sudo)\" = 0 && test -u /
 # ssh.service не должен падать на старте: ключи генерируются drop-in'ом
 # ДО sshd (полевой дефект 1.2.4 #5)
 check "ssh-clean-start" sh -c "systemctl show ssh.service -p NRestarts --value | grep -qx 0 && systemctl is-active --quiet ssh.service"
-check "pids-limit" sh -c "podman inspect mikopbx --format '{{.HostConfig.PidsLimit}}' 2>/dev/null | grep -q 4096"
+check "pids-limit" sh -c "podman inspect mikopbx --format '{{.HostConfig.PidsLimit}}' 2>/dev/null | grep -qx \"\$(sed -n 's/^PidsLimit=//p' /etc/containers/systemd/mikopbx.container | head -1)\""
 check "handle-power-key" sh -c "busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandlePowerKey 2>/dev/null | grep -q ignore"
 # journal-persistent проверяется после reboot-фазы (см. ниже)
 
