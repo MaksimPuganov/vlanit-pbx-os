@@ -29,6 +29,7 @@ wireguard-tools
 logrotate
 unattended-upgrades fail2ban
 plymouth plymouth-themes
+systemd-timesyncd console-setup
 "
 
 log "mmdebstrap: Debian 13 (trixie) minimal rootfs"
@@ -48,6 +49,16 @@ chroot "$ROOTFS" sh -c '
     DEBIAN_FRONTEND=noninteractive apt-get -y -qq full-upgrade
 '
 
+# security/updates-источники (mmdebstrap пишет только базовый сьют;
+# без trixie-security unattended-upgrades нечего обновлять)
+log "apt sources: trixie + updates + security"
+cat > "$ROOTFS/etc/apt/sources.list.d/debian.list" <<'EOF'
+deb http://deb.debian.org/debian trixie main contrib non-free-firmware
+deb http://deb.debian.org/debian-security trixie-security main contrib non-free-firmware
+deb http://deb.debian.org/debian trixie-updates main contrib non-free-firmware
+EOF
+rm -f "$ROOTFS/etc/apt/sources.list"
+
 # --- установка VLANit-компонентов в rootfs ---
 log "копирование VLANit provisioning / quadlet / snapshots"
 install -d -m 0755 "$ROOTFS/opt/vlanit"
@@ -55,6 +66,8 @@ cp -a "$PROJECT_ROOT/provisioning/." "$ROOTFS/opt/vlanit/provisioning/"
 cp -a "$PROJECT_ROOT/snapshots/vlanit-snapshot" "$ROOTFS/opt/vlanit/"
 install -D -m 0644 "$PROJECT_ROOT/quadlet/mikopbx.container" \
     "$ROOTFS/etc/containers/systemd/mikopbx.container"
+# пароль веб-админа — в файле; читает только root (аудит cso #1)
+chmod 600 "$ROOTFS/etc/containers/systemd/mikopbx.container"
 install -D -m 0644 "$PROJECT_ROOT/rootfs/etc-containers-registries.conf" \
     "$ROOTFS/etc/containers/registries.conf"
 
@@ -110,6 +123,17 @@ Theme=vlanit
 ShowDelay=0
 EOF
 
+# кириллица на консоли (trixie: шрифты только в console-setup)
+cat > "$ROOTFS/etc/vconsole.conf" <<'EOF'
+FONT=CyrSlav-DejaVu30x16
+EOF
+
+# NTP: резервные серверы при отсутствии DHCP-опций
+cat > "$ROOTFS/etc/systemd/timesyncd.conf" <<'EOF'
+[Time]
+FallbackNTP=0.deb.pool.ntp.org 1.deb.pool.ntp.org 2.deb.pool.ntp.org
+EOF
+
 # first-boot служба
 install -D -m 0644 "$PROJECT_ROOT/rootfs/vlanit-firstboot.service" \
     "$ROOTFS/etc/systemd/system/vlanit-firstboot.service"
@@ -133,6 +157,7 @@ install -D -m 0644 "$PROJECT_ROOT/rootfs/vlanit-backup-test.service" \
 for unit in vlanit-firstboot.service vlanit-test-agent.service \
             vlanit-ota-test.service vlanit-backup-test.service \
             systemd-networkd.service systemd-resolved.service \
+            systemd-timesyncd.service \
             ssh.service fail2ban.service; do
     chroot "$ROOTFS" systemctl enable "$unit" 2>/dev/null || \
         echo "WARN: не удалось включить $unit"

@@ -17,6 +17,7 @@ systemd-sysv dbus udev
 linux-image-amd64 initramfs-tools busybox-static
 dialog locales ncurses-term
 gdisk parted
+console-setup
 btrfs-progs dosfstools e2fsprogs
 openssh-server sudo
 curl ca-certificates jq zstd tar
@@ -65,6 +66,10 @@ install -D -m 0644 "$PROJECT_ROOT/live/vlanit-installer.service" \
 install -D -m 0644 "$PROJECT_ROOT/live/99-vlanit-live.preset" \
     "$ROOTFS/etc/systemd/system-preset/99-vlanit-live.preset"
 echo "vlanit-pbx-live" > "$ROOTFS/etc/hostname"
+# кириллица в TUI мастера: консольный шрифт с Cyrillic
+cat > "$ROOTFS/etc/vconsole.conf" <<'EOF'
+FONT=CyrSlav-DejaVu30x16
+EOF
 # ssh в live-среде не нужен (ключи удалены, сервис падает)
 chroot "$ROOTFS" systemctl mask ssh.service 2>/dev/null || true
 # preset-файл попадает в rootfs уже после установки пакетов — включаем явно

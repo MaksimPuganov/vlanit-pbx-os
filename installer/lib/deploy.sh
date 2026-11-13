@@ -73,6 +73,7 @@ configure_target_system() {
     local kernel_args="${6:-}"
 
     echo "$hostname" > "$SYS_MNT/etc/hostname"
+    echo "$tz" > "$SYS_MNT/etc/timezone"
     cat > "$SYS_MNT/etc/hosts" <<EOF
 127.0.0.1	localhost
 127.0.1.1	$hostname
@@ -131,6 +132,7 @@ import re
 text = re.sub(r"# VLANIT-ENV-BEGIN.*?# VLANIT-ENV-END", block, text, flags=re.S)
 open(path, "w").write(text)
 PYEOF
+    chmod 600 "$quadlet"   # пароль веб-админа — только root (cso #1)
 }
 
 # chroot-операции: initramfs + загрузчик

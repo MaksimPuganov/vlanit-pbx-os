@@ -163,7 +163,13 @@ if [ -n "$AUTOMODE" ]; then
     PBX_ADMIN_PASS="$(yaml_get "$AUTO_FILE" mikopbx.web_admin_password "")"
 else
     PBX_NAME="$(dialog --title "MikoPBX" --inputbox "Имя АТС (PBX_NAME):" 8 60 "VLANit-PBX" --stdout)" || exit 1
-    PBX_ADMIN_PASS="$(dialog --title "MikoPBX" --passwordbox "Пароль веб-админа MikoPBX (пусто = стандартный, не рекомендуется):" 8 60 --stdout)" || exit 1
+    PBX_ADMIN_PASS="$(dialog --title "MikoPBX" --passwordbox "Пароль веб-админа MikoPBX (пусто = будет сгенерирован и показан):" 8 60 --stdout)" || exit 1
+fi
+# пустой пароль недопустим: генерируем и показываем на экране завершения
+PBX_PASS_GENERATED=0
+if [ -z "$PBX_ADMIN_PASS" ]; then
+    PBX_ADMIN_PASS="$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 16)"
+    PBX_PASS_GENERATED=1
 fi
 
 # ---------------------------------------------------------------
@@ -263,6 +269,12 @@ Hostname: $SYS_HOSTNAME
 IP-адрес: $IP_ADDR
 Статус MikoPBX: будет запущена автоматически при первой загрузке
 Веб-интерфейс: https://$IP_ADDR (логин: $PBX_ADMIN_LOGIN)"
+
+if [ "$PBX_PASS_GENERATED" = "1" ]; then
+    finish_text="$finish_text
+Пароль веб-админа сгенерирован автоматически, сохраните:
+$PBX_ADMIN_PASS"
+fi
 
 if [ -n "$WG_PUBKEY" ]; then
     finish_text="$finish_text
