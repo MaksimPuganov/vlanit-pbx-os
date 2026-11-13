@@ -1,7 +1,18 @@
-# Сборка ISO VLANit PBX OS (запуск вручную — workflow_dispatch).
+# Сборка ISO VLANit PBX OS.
+# Правило релизов (идея #11, docs/ideas/engine-package.md):
+#   - тег и файлы релиза не меняются после публикации;
+#   - каждый релиз собирает CI из запушенных исходников (на коммите тега);
+#   - контрольные суммы подписаны GPG-ключом релиза (pub в rootfs/etc-vlanit-release.pub).
+#
+# Триггеры:
+#   - push тега v*          -> сборка + публикация релиза с этим тегом;
+#   - workflow_dispatch     -> сборка (+ публикация при release: true).
 name: build-iso
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       release:
@@ -25,22 +36,35 @@ jobs:
       - name: Сборка ISO
         run: make iso
 
+      - name: Подпись контрольных сумм (GPG)
+        env:
+          RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
+        run: bash scripts/sign-release.sh
+
       - name: Артефакт ISO
-        if: ${{ !inputs.release }}
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.release }}
         uses: actions/upload-artifact@v4
         with:
           name: vlanit-pbx-iso
           path: |
             dist/*.iso
             dist/*.iso.sha256
+            dist/*.iso.sha256.asc
           retention-days: 14
 
       - name: Публикация релиза
-        if: ${{ inputs.release }}
+        # тег: всегда; ручной запуск: по параметру
+        if: ${{ github.event_name == 'push' || inputs.release }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VER=$(grep -oP 'version:\s*"\K[0-9.]+' config/build.yaml | head -1)
-          gh release create "v${VER}" dist/*.iso dist/*.iso.sha256 \
-            --title "VLANit PBX OS ${VER}" \
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            VER=$(grep -oP 'version:\s*"\K[0-9.]+' config/build.yaml | head -1)
+            TAG="v${VER}"
+          fi
+          gh release create "$TAG" dist/*.iso dist/*.iso.sha256 dist/*.iso.sha256.asc \
+            --title "VLANit PBX OS ${TAG#v}" \
+            --verify-tag \
             --generate-notes
