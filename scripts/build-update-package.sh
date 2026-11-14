@@ -35,9 +35,10 @@ PKG="vlanit-update-${MIN_VER}+atsc${NEW_VER}-$(date +%Y%m%d).tar"
 tar -C "$STAGE" -cf "$OUTDIR/$PKG" manifest.json "$IMG_NAME"
 rm -f "$STAGE/$IMG_NAME" "$STAGE/manifest.json"
 
-export GNUPGHOME="${GNUPGHOME:-$HOME/.vlanit-release-gnupg}"
-[ -d "$GNUPGHOME" ] || { echo "приватный ключ релиза не найден: $GNUPGHOME" >&2; exit 1; }
-gpg --batch --yes --armor --detach-sign -o "$OUTDIR/$PKG.asc" "$OUTDIR/$PKG"
+# общий префикс: GNUPGHOME, импорт ключа из секрета, gpg_release_sign (ponytail #28)
+# shellcheck source=scripts/gpg-release-common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/gpg-release-common.sh"
+gpg_release_sign "$OUTDIR/$PKG"
 
 echo "пакет: $OUTDIR/$PKG"
 echo "подпись: $OUTDIR/$PKG.asc"

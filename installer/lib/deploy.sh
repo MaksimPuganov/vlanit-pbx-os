@@ -134,25 +134,16 @@ configure_target_mikopbx() {
     sed -i -E "s/^PidsLimit=.*/PidsLimit=$pids_limit/" "$quadlet"
     python3 - "$quadlet" "$pbx_name" "$admin_login" "$admin_pass" <<'PYEOF'
 import sys
+sys.path.insert(0, "/opt/vlanit/provisioning")  # live-среда: общий модуль
+import vlanit_quadlet
+
 path, name, login, passwd = sys.argv[1:5]
-
-def q(v: str) -> str:
-    # systemd/quadlet-формат: значения с пробелами/спецсимволами — в кавычках
-    if any(c.isspace() for c in v) or '"' in v:
-        return '"' + v.replace('\\', '\\\\').replace('"', '\\"') + '"'
-    return v
-
-text = open(path).read()
-block = (
-    "# VLANIT-ENV-BEGIN\n"
-    f"Environment=PBX_NAME={q(name)}\n"
-    f"Environment=WEB_ADMIN_LOGIN={q(login)}\n"
-    f"Environment=WEB_ADMIN_PASSWORD={q(passwd)}\n"
-    "# VLANIT-ENV-END"
-)
-import re
-text = re.sub(r"# VLANIT-ENV-BEGIN.*?# VLANIT-ENV-END", block, text, flags=re.S)
-open(path, "w").write(text)
+# общая реализация блока VLANIT-ENV с vlanit-provision (ponytail #25)
+vlanit_quadlet.write_env_block(path, [
+    ("PBX_NAME", name),
+    ("WEB_ADMIN_LOGIN", login),
+    ("WEB_ADMIN_PASSWORD", passwd),
+])
 PYEOF
     chmod 600 "$quadlet"   # пароль веб-админа — только root (cso #1)
 }

@@ -14,6 +14,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import vlanit_quadlet
+
 try:
     import yaml
 except ImportError:
@@ -109,32 +112,11 @@ def main() -> None:
             if key not in ALLOWED_MIKOPBX_ENV:
                 die(f"неподтверждённый параметр mikopbx.env.{key} — отказ")
             env_pairs.append((key, str(value)))
-        lines = []
-        for k, v in env_pairs:
-            v = str(v)
-            # systemd/quadlet-формат: пробелы/кавычки — только в кавычках
-            if any(c.isspace() for c in v) or '"' in v:
-                v = '"' + v.replace('\\', '\\\\').replace('"', '\\"') + '"'
-            lines.append(f"Environment={k}={v}")
-        content = "\n".join(lines) + ("\n" if lines else "")
+        content = "\n".join(
+            f"Environment={k}={vlanit_quadlet.env_value(v)}" for k, v in env_pairs
+        ) + ("\n" if env_pairs else "")
         if QUADLET_PATH.exists():
-            text = QUADLET_PATH.read_text(encoding="utf-8")
-            # заменить блок VLANit-ENV (между маркерами)
-            begin, end = "# VLANIT-ENV-BEGIN", "# VLANIT-ENV-END"
-            if begin in text:
-                text = re.sub(
-                    re.escape(begin) + r".*?" + re.escape(end),
-                    begin + "\n" + content.rstrip() + "\n" + end,
-                    text, flags=re.S,
-                )
-            else:
-                # блок должен попасть в секцию [Container]: только оттуда
-                # Quadlet передаёт Environment= в контейнер (дефект 1.2.4)
-                text = text.replace(
-                    "[Container]",
-                    f"[Container]\n{begin}\n{content.rstrip()}\n{end}\n",
-                )
-            QUADLET_PATH.write_text(text, encoding="utf-8")
+            vlanit_quadlet.write_env_block(str(QUADLET_PATH), env_pairs)
         ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
         ENV_PATH.write_text(content, encoding="utf-8")
         print(f"PBX provisioning: применено {len(env_pairs)} параметров "

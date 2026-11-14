@@ -122,7 +122,7 @@ bash scripts/pull-mikopbx.sh
 # сборка ISO
 make iso            # == bash scripts/build.sh в build-контейнере
 
-# тесты в QEMU/KVM (нужен пакет ovmf: apt-get download ovmf + dpkg -x)
+# тесты в QEMU/KVM (нужны: ovmf — apt-get download ovmf + dpkg -x; python3-pil — скриншоты)
 bash scripts/test-qemu.sh all        # все сценарии
 bash scripts/test-qemu.sh install    # только установка/загрузка/MikoPBX
 

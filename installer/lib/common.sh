@@ -43,17 +43,6 @@ print("" if cur is None else cur)
 PYEOF
 }
 
-# список/словарь целиком в JSON (для разбора ответов autoinstall)
-yaml_to_json() {
-    python3 - "$1" <<'PYEOF'
-import sys, json, yaml
-try:
-    print(json.dumps(yaml.safe_load(open(sys.argv[1])) or {}))
-except Exception:
-    print("{}")
-PYEOF
-}
-
 human_gb() {
     awk -v bytes="$1" 'BEGIN { printf "%.1f", bytes/1024/1024/1024 }'
 }
