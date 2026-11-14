@@ -33,3 +33,24 @@
   пункты честно перечисляются в notes релиза.
 - **Тест-агент** — единый источник проверок: новая функциональность
   покрывается проверкой агента (id: одна фича — одна проверка).
+
+## 3. Сборка и релизы через CI (с 1.2.6)
+
+- **Workflow `build-iso`** (`.github/workflows/build-iso.yml`): push тега `v*`
+  → сборка ISO из исходников тега → GPG-подпись контрольных сумм →
+  публикация релиза с этим тегом (`--verify-tag`). Ручной запуск —
+  `workflow_dispatch` (артефакт или `release: true`).
+- **Правило релизов**: тег и файлы релиза после публикации не меняются;
+  локально ISO не пересобираем «поверх» опубликованного релиза — бампим
+  версию и идём через новый тег.
+- **Подпись**: `scripts/sign-release.sh` подписывает `dist/*.iso.sha256`
+  ключом релиза (pub — `rootfs/etc-vlanit-release.pub`, приватный —
+  GitHub Secret `RELEASE_GPG_PRIVATE_KEY`). Проверка подписи — обязательный
+  шаг при выкладке ISO из любого источника.
+- **Релизный цикл**: `git tag vX.Y.Z && git push origin vX.Y.Z` — дальше CI.
+  Версию бампить во всех местах ДО тега (build.yaml, release-manifest,
+  os-release, имена ISO, README, docs/testing.md).
+- **push workflow-файлов** требует scope `workflow` у токена (`gh auth
+  refresh -s workflow`); без него GitHub отклоняет пуш.
+- Документы: README «Правило релизов (CI)», идея #11 в
+  `docs/ideas/engine-package.md` (РЕАЛИЗОВАНО).
