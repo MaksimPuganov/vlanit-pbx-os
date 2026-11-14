@@ -123,11 +123,28 @@ logind (`/etc/systemd/logind.conf.d/01-vlanit.conf`, 1.2.4):
 короткое нажатие — игнор, длинное (>5 с) — штатное выключение.
 Апплаенс: случайное нажатие не должно ронять телефонию.
 
-## Контейнер MikoPBX (лимиты, 1.2.4)
+## Контейнер MikoPBX (лимиты, 1.2.6)
 
-`PidsLimit=4096`, `TimeoutStopSec=120` в quadlet (по умолчанию podman:
-2048 pids, стоп 10 с — недостаточно для корректного завершения АТС).
+`PidsLimit` и `StopTimeout` задаются установщиком из настройки
+`/etc/vlanit/mikopbx-container.conf` (дефолты 8192 и 120 с; раньше было
+жёстко 4096, стоп 10 с — недостаточно для корректного завершения АТС).
 `MemoryMax` — осознанно не задан (жёсткий лимит рискован для длинных звонков).
+
+## Сборка релизов и цепочка доверия (CI, 1.2.6)
+
+- Workflow `build-iso` (`.github/workflows/build-iso.yml`): push тега `v*`
+  → сборка ISO из исходников тега в build-контейнере → GPG-подпись
+  контрольных сумм → публикация релиза (`--verify-tag`). Тег и файлы после
+  публикации не меняются (идея #11).
+- Подпись: `scripts/sign-release.sh`, detached-sign `*.iso.sha256` ключом
+  релиза. Приватный ключ — GitHub Secret `RELEASE_GPG_PRIVATE_KEY`;
+  публичный — `rootfs/etc-vlanit-release.pub` (ed25519,
+  `2DACA38E…4CB4`), тот же, что подписывает OTA-пакеты — одна цепочка
+  доверия на ISO и OTA.
+- Проверка у получателя: `gpg --no-default-keyring --keyring
+  rootfs/etc-vlanit-release.pub --verify <file>.sha256.asc`, затем
+  `sha256sum -c <file>.sha256`.
+- Спека: `docs/specs/1.2.6-ci-release.md`.
 
 ## Безопасность установщика
 

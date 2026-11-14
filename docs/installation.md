@@ -58,7 +58,17 @@ diskutil eject /dev/disk4
 
 ### Проверка записи
 
+Контрольные суммы релиза подписаны GPG-ключом релиза (CI, с 1.2.6).
+Проверяйте подпись перед записью — так вы убеждаетесь, что ISO пришёл
+неизменённым от сборки:
+
 ```bash
+# 1) подпись контрольной суммы (публичный ключ — в репозитории, rootfs/etc-vlanit-release.pub)
+gpg --no-default-keyring --keyring rootfs/etc-vlanit-release.pub \
+    --verify dist/VLANit-PBX-1.2.6-amd64.iso.sha256.asc
+# ожидается: «Действительная подпись VLANit PBX OS Release»
+
+# 2) целостность образа
 sha256sum -c dist/VLANit-PBX-1.2.6-amd64.iso.sha256   # сверить образ до записи
 # после записи — сравнить первые блоки (Linux):
 sudo head -c 1G /dev/sdX | sha256sum   # должно совпасть с началом образа

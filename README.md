@@ -181,3 +181,5 @@ make clean          # очистка build/{rootfs,live,iso-staging}, dist
        --verify dist/VLANit-PBX-X.Y.Z-amd64.iso.sha256.asc
    sha256sum -c dist/VLANit-PBX-X.Y.Z-amd64.iso.sha256
    ```
+
+   Спека пайплайна: `docs/specs/1.2.6-ci-release.md`.
