@@ -17,7 +17,6 @@ cp -a "$PAYLOAD_SRC/mikopbx-2026.6.99-amd64.tar.zst" "$PAYLOAD_SRC/mikopbx-2026.
 
 # версии/defaults для установщика
 cp -a "$PROJECT_ROOT/config/build.yaml" "$STAGING/payload/build.yaml"
-cp -a "$PROJECT_ROOT/config/defaults.yaml" "$STAGING/payload/defaults.yaml"
 cp -a "$PROJECT_ROOT/config/release-manifest.yaml" "$STAGING/payload/release-manifest.yaml"
 
 GOLDEN_SHA="$(awk '{print $1}' "$STAGING/payload/golden.tar.zst.sha256")"

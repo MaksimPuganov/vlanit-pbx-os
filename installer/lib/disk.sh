@@ -39,7 +39,7 @@ disk_size_bytes() {
 partition_disk() {
     local disk="$1"
     local sys_mib data_mib
-    sys_mib="$(yaml_get "$PAYLOAD/defaults.yaml" storage.system_size_mib 40960)"
+    sys_mib="$(yaml_get "$PAYLOAD/build.yaml" installer.system_size_mib 40960)"
 
     log "разметка $disk (GPT): EFI 1024MiB, System ${sys_mib}MiB, Data — остаток"
     wipefs -a "$disk"

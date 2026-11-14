@@ -23,6 +23,8 @@ installer:
   # минимальные предварительные требования (на основе офиц. док-ции MikoPBX)
   min_ram_mb: 2048
   warn_disk_gb: 64
+  # размер System-раздела, MiB (остальное — Data)
+  system_size_mib: 40960
 
 provisioning:
   schema_version: 1

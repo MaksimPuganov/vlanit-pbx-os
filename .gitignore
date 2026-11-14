@@ -6,4 +6,8 @@
 /tools/podman-etc/
 /tools/podman-debs/
 *.log
+# выхлопы запусков — не исходники
+__pycache__/
+*.pyc
+.gstack/
 # приватный ключ релиза хранится ВНЕ репозитория (~/.vlanit-release-gnupg)

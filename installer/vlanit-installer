@@ -28,6 +28,20 @@ fi
 # Сбор параметров (интерактивно или из autoinstall.yaml)
 # ---------------------------------------------------------------
 collect_hardware_info
+# Экран 1. Сведения об оборудовании (CPU/RAM/интерфейсы/режим загрузки)
+if [ -z "$AUTOMODE" ]; then
+    hw_text="Процессор: $HW_CPU_MODEL ($HW_CPU_CORES ядер)
+ОЗУ: $HW_RAM_MB МБ
+Сетевые интерфейсы: ${HW_INTERFACES:-нет}
+Режим загрузки: $HW_BOOT_MODE"
+    warn="$(hardware_warnings)"
+    [ -n "$warn" ] && hw_text="$hw_text
+
+ПРЕДУПРЕЖДЕНИЯ:
+$warn"
+    dialog --title "Экран 1. Проверка оборудования" --msgbox "$hw_text" 14 70 \
+        || exit 1
+fi
 if [ "$HW_BOOT_MODE" != "UEFI" ]; then
     if [ -n "$AUTOMODE" ]; then die "требуется UEFI"; fi
     dialog --title "Режим загрузки" --msgbox \
