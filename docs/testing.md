@@ -38,6 +38,7 @@ MikoPBX (REBOOT_TEST_PASS).
 | Тест | Результат |
 |---|---|
 | Т1–Т9 полный прогон | PASS (агент: 42 проверки; WARN-CHECK reboot-api-login — известный upstream-баг #10) |
+| Прогон после ponytail #24–#28 (общий vlanit_quadlet, gpg-release-common) | PASS (42 проверки) |
 
 Ядро 6.12.117+deb13-amd64. Закрыты ponytail-issues #21–#23: фантомный
 defaults.yaml удалён (system_size_mib → installer.system_size_mib в
