@@ -33,6 +33,18 @@ MikoPBX (REBOOT_TEST_PASS).
 
 ## Фактические результаты
 
+### Прогон 2026-11-14, ISO VLANit-PBX-1.2.7-amd64.iso (ponytail-фиксы #21–#23)
+
+| Тест | Результат |
+|---|---|
+| Т1–Т9 полный прогон | PASS (агент: 42 проверки; WARN-CHECK reboot-api-login — известный upstream-баг #10) |
+
+Ядро 6.12.117+deb13-amd64. Закрыты ponytail-issues #21–#23: фантомный
+defaults.yaml удалён (system_size_mib → installer.system_size_mib в
+build.yaml), артефакты (__pycache__, .gstack) вычищены из git, реализован
+Экран 1 «Проверка оборудования» TUI (CPU/RAM/интерфейсы/режим загрузки +
+предупреждения). Остальные находки аудита — #24–#28 (бэклог).
+
 ### Прогон 2026-11-13, ISO VLANit-PBX-1.2.6-amd64.iso (полевые фиксы, issue #15–#19)
 
 | Тест | Результат |
