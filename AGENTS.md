@@ -52,6 +52,10 @@
   os-release, имена ISO, README, docs/testing.md).
 - **push workflow-файлов** требует scope `workflow` у токена (`gh auth
   refresh -s workflow`); без него GitHub отклоняет пуш.
+- **Описание релиза** — секция \`## X.Y.Z\` в CHANGELOG.md. Секцию пишем
+  ДО тега (она часть исходников на коммите тега; тег не меняется). Без
+  секции workflow опубликует релиз с автогенерацией и WARN — это сигнал
+  дописать changelog.
 - Документы: README «Правило релизов (CI)», идея #11 в
   `docs/ideas/engine-package.md` (РЕАЛИЗОВАНО).
 
