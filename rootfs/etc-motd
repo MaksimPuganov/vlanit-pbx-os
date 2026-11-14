@@ -1,4 +1,4 @@
-VLANit PBX OS 1.2.6 — Debian 13 + Podman + MikoPBX
+VLANit PBX OS 1.2.7 — Debian 13 + Podman + MikoPBX
 
 Полезные команды:
   systemctl status mikopbx      — состояние контейнера MikoPBX

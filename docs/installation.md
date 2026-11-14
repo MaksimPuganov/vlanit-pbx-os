@@ -12,7 +12,7 @@
 проверяет смонтированные разделы и требует явного подтверждения.
 
 ```bash
-sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.2.6-amd64.iso /dev/sdX
+sudo bash scripts/write-usb.sh dist/VLANit-PBX-1.2.7-amd64.iso /dev/sdX
 ```
 
 (`/dev/sdX` — ваша флэшка, например `/dev/sdb`; точное имя смотрите
@@ -58,18 +58,18 @@ diskutil eject /dev/disk4
 
 ### Проверка записи
 
-Контрольные суммы релиза подписаны GPG-ключом релиза (CI, с 1.2.6).
+Контрольные суммы релиза подписаны GPG-ключом релиза (CI, с 1.2.7).
 Проверяйте подпись перед записью — так вы убеждаетесь, что ISO пришёл
 неизменённым от сборки:
 
 ```bash
 # 1) подпись контрольной суммы (публичный ключ — в репозитории, rootfs/etc-vlanit-release.pub)
 gpg --no-default-keyring --keyring rootfs/etc-vlanit-release.pub \
-    --verify dist/VLANit-PBX-1.2.6-amd64.iso.sha256.asc
+    --verify dist/VLANit-PBX-1.2.7-amd64.iso.sha256.asc
 # ожидается: «Действительная подпись VLANit PBX OS Release»
 
 # 2) целостность образа
-sha256sum -c dist/VLANit-PBX-1.2.6-amd64.iso.sha256   # сверить образ до записи
+sha256sum -c dist/VLANit-PBX-1.2.7-amd64.iso.sha256   # сверить образ до записи
 # после записи — сравнить первые блоки (Linux):
 sudo head -c 1G /dev/sdX | sha256sum   # должно совпасть с началом образа
 ```
@@ -101,7 +101,7 @@ Live-среда загрузится и автоматически запуст�
 
 ## Часовой пояс
 
-Мастер (экран «Система», с 1.2.6) спрашивает IANA-часовой пояс
+Мастер (экран «Система», с 1.2.7) спрашивает IANA-часовой пояс
 (по умолчанию `Europe/Moscow`). Установщик пишет `/etc/timezone` и
 `/etc/localtime`; синхронизация времени — systemd-timesyncd.
 Через autoinstall.yaml: ключ `timezone` (например `Europe/Moscow`).

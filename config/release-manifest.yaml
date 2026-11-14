@@ -2,7 +2,7 @@
 # Заполняется сборкой (scripts/50-iso.sh) и проверяется установщиком.
 distro:
   name: VLANit PBX OS
-  version: "1.2.6"
+  version: "1.2.7"
   installer_version: "1.0.0"
   schema_version: 1
   build_date: null        # ISO8601, проставляется сборкой

@@ -7,7 +7,7 @@ all: iso
 # Полная сборка ISO. Сборка ВСЕГДА внутри привилегированного build-контейнера
 # Debian 13 (root внутри контейнера): сборка на хосте под обычным
 # пользователем приводит к rootfs с uid 1000 и неработающему sudo (полевой
-# дефект 1.2.4, см. docs/specs/1.2.6-field-fixes.md).
+# дефект 1.2.4, см. docs/specs/1.2.7-field-fixes.md).
 iso: check image
 	docker run --rm --privileged -v "$$PWD:/build" vlanit-build:1.1 bash scripts/build.sh
 
@@ -43,4 +43,4 @@ help:
 	@echo ""
 	@echo "Ключевые артефакты:"
 	@echo "  build/payload/mikopbx.tar.zst — контейнерный образ MikoPBX"
-	@echo "  dist/VLANit-PBX-1.2.6-amd64.iso — итоговый ISO"
+	@echo "  dist/VLANit-PBX-1.2.7-amd64.iso — итоговый ISO"
